@@ -52,17 +52,21 @@ class WorldDotMap extends StatefulWidget {
   /// Whether the dot at [normalized] position (unit square) survives
   /// decimation for the given [stride].
   ///
-  /// Dots are kept only when their 1°-grid column and row are multiples of
-  /// [stride], so on-screen spacing doubles/quadruples while every kept dot
-  /// stays aligned to the same invisible grid. The dataset sits on integer
-  /// degrees, so `col = (dx*360).round()` and `row = (dy*180).round()` are
-  /// exact (no rounding ambiguity).
+  /// Dots are kept only when the 1°-grid cell that CONTAINS them has column
+  /// and row multiples of [stride], so on-screen spacing doubles/quadruples
+  /// while every kept dot stays aligned to the same invisible grid.
+  ///
+  /// The cell is the one containing the dot (`floor`), not the nearest one
+  /// (`round`): the dataset places dots at cell CENTERS (lon = col + 0.5),
+  /// and Dart's `round` rounds .5 up — `round(col+180.5)` would map every
+  /// dot to its neighbor cell, shifting the whole kept grid one cell right
+  /// and eating coastlines asymmetrically.
   static bool keepDot(Offset normalized, int stride) {
     if (stride == 1) {
       return true;
     }
-    final col = (normalized.dx * 360).round();
-    final row = (normalized.dy * 180).round();
+    final col = (normalized.dx * 360).floor();
+    final row = (normalized.dy * 180).floor();
     return col % stride == 0 && row % stride == 0;
   }
 
