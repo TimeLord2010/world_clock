@@ -44,8 +44,9 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   void initState() {
     super.initState();
     // Keep the day/night boundary moving: refresh the reference instant
-    // once a minute.
-    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+    // every 30 minutes (the sun moves ~7.5° of longitude in that window,
+    // clearly visible on screen; per-minute updates are imperceptible).
+    _ticker = Timer.periodic(const Duration(minutes: 30), (_) {
       setState(() => _now = DateTime.now());
     });
   }
