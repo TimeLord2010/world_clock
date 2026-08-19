@@ -18,7 +18,7 @@ class WorldClockApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+        scaffoldBackgroundColor: const Color(0xFF111111),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFFE6D34),
           brightness: Brightness.dark,

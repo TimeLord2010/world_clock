@@ -24,7 +24,7 @@ import 'world_sun.dart';
 class WorldDotMap extends StatefulWidget {
   const WorldDotMap({
     super.key,
-    this.backgroundColor = const Color(0xFF1A1A1A),
+    this.backgroundColor = const Color(0xFF111111),
     this.dotColor = const Color(0xFFFE6D34),
     this.now,
   });
