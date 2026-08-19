@@ -49,6 +49,11 @@ struct WorldDotMapRenderer {
 
     /// Renders the map for instant [now] into physical pixels
     /// (width/height logical × dpr). Cached per (minute, size).
+    ///
+    /// The bitmap covers the whole widget: the `#111111` background fills
+    /// every pixel, and the 2:1 map is drawn centered inside with a small
+    /// safety margin. The margin is part of OUR drawing — there is no area
+    /// where the system widget background could show through.
     func render(now: Date, width: CGFloat, height: CGFloat, dpr: CGFloat) -> CGImage {
         let wPhys = Int((Double(width) * Double(dpr)).rounded())
         let hPhys = Int((Double(height) * Double(dpr)).rounded())
@@ -58,8 +63,18 @@ struct WorldDotMapRenderer {
         let key = "\(minute)-\(wPhys)x\(hPhys)"
         if let c = Self.cached, c.key == key { return c.image }
 
-        let cellPx = Double(wPhys) / 360
-        let stride = stride(widthLogical: width, dpr: dpr)
+        // Safety margin inside our own canvas (5pt logical).
+        let marginPx = max(1, (5 * Double(dpr)).rounded())
+        let availW = Double(wPhys) - 2 * marginPx
+        let availH = Double(hPhys) - 2 * marginPx
+        let mapW = min(availW, availH * 2)
+        let mapH = mapW / 2
+        let originX = (Double(wPhys) - mapW) / 2
+        let originY = (Double(hPhys) - mapH) / 2
+
+        // Decimation by the MAP width (not the widget width).
+        let cellPx = mapW / 360
+        let stride = stride(widthLogical: mapW / Double(dpr), dpr: dpr)
         var dotPx = (cellPx * Double(stride) * 0.5).rounded()
         if dotPx < 1 { dotPx = 1 }
 
@@ -76,24 +91,22 @@ struct WorldDotMapRenderer {
 
         ctx.setShouldAntialias(true)
         let half = dotPx / 2
-        var prevColor = (r: -1.0, g: 0.0, b: 0.0) // force first set
 
         for dot in dots {
             guard keepDot(lon: dot.lon, lat: dot.lat, stride: stride) else { continue }
 
             let t = SunShading.intensity(latDeg: dot.lat, lonDeg: dot.lon, now: now)
             let level = Self.minBrightness + t * (1 - Self.minBrightness)
-            let r = backgroundColor.r + (dotColor.r - backgroundColor.r) * level
-            let g = backgroundColor.g + (dotColor.g - backgroundColor.g) * level
-            let b = backgroundColor.b + (dotColor.b - backgroundColor.b) * level
-            if r != prevColor.r || g != prevColor.g || b != prevColor.b {
-                ctx.setFillColor(CGColor(red: r, green: g, blue: b, alpha: 1))
-                prevColor = (r, g, b)
-            }
+            ctx.setFillColor(CGColor(
+                red: backgroundColor.r + (dotColor.r - backgroundColor.r) * level,
+                green: backgroundColor.g + (dotColor.g - backgroundColor.g) * level,
+                blue: backgroundColor.b + (dotColor.b - backgroundColor.b) * level,
+                alpha: 1))
 
-            // Pixel-snapped center; CGContext y grows upward, so flip.
-            let x = ((dot.lon + 180) / 360 * Double(wPhys)).rounded()
-            let yScreen = ((90 - dot.lat) / 180 * Double(hPhys)).rounded()
+            // Pixel-snapped center inside the map rect; CGContext y grows
+            // upward, so flip.
+            let x = (originX + (dot.lon + 180) / 360 * mapW).rounded()
+            let yScreen = (originY + (90 - dot.lat) / 180 * mapH).rounded()
             let y = Double(hPhys) - yScreen
             ctx.fillEllipse(in: CGRect(x: x - half, y: y - half, width: dotPx, height: dotPx))
         }

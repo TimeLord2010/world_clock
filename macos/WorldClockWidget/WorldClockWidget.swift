@@ -32,7 +32,7 @@ struct Provider: TimelineProvider {
     }
 }
 
-// MARK: - View: the dot-matrix world map, filling the whole widget
+// MARK: - View: renders the widget-sized bitmap edge to edge
 
 struct WorldClockWidgetView: View {
     @Environment(\.displayScale) var displayScale
@@ -40,34 +40,23 @@ struct WorldClockWidgetView: View {
 
     private static let renderer = WorldDotMapRenderer.loadDefault()
 
-    /// Map size that covers [container] while keeping the 2:1 aspect:
-    /// width = max(containerW, 2*containerH). The widget frame then clips
-    /// the overflow, so the map fills the widget edge to edge (no empty
-    /// bands top/bottom or left/right).
-    private func fillSize(_ container: CGSize) -> CGSize {
-        let w = max(container.width, container.height * 2)
-        return CGSize(width: w, height: w / 2)
-    }
-
     private func mapImage(container: CGSize) -> CGImage? {
         guard let renderer = Self.renderer else { return nil }
-        let size = fillSize(container)
         let dpr = displayScale > 0 ? displayScale : 2.0
-        return renderer.render(now: entry.date, width: size.width, height: size.height, dpr: dpr)
+        // The renderer draws the FULL widget canvas (background + map with
+        // its internal safety margin), so the view just fills the frame —
+        // there is no uncovered area where a system background could show.
+        return renderer.render(now: entry.date, width: container.width, height: container.height, dpr: dpr)
     }
 
     var body: some View {
         GeometryReader { geo in
-            Group {
-                if let image = mapImage(container: geo.size) {
-                    Image(nsImage: NSImage(cgImage: image, size: fillSize(geo.size)))
-                        .resizable()
-                        .interpolation(.none)
-                        .scaledToFill()
-                }
+            if let image = mapImage(container: geo.size) {
+                Image(nsImage: NSImage(cgImage: image, size: geo.size))
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFill()
             }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
         }
         .containerBackground(for: .widget) {
             Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
@@ -85,6 +74,9 @@ struct WorldClockWidget: Widget {
         .configurationDisplayName("World Clock")
         .description("Mapa-múndi com a luz solar atual")
         .supportedFamilies([.systemSmall, .systemMedium])
+        // Remove the system default content margins so the map bleeds to
+        // the widget's edge (the map fills the full content frame already).
+        .contentMarginsDisabled()
     }
 }
 
