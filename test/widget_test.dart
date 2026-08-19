@@ -15,6 +15,21 @@ void main() {
     }
   });
 
+  test('decimation keeps only dots on stride-aligned grid cells', () async {
+    final dots = await WorldDotMap.loadDots();
+
+    // Stride 1 keeps everything.
+    expect(dots.where((o) => WorldDotMap.keepDot(o, 1)).length, dots.length);
+
+    // Stride 4 keeps only ~1/16 of the 1°-grid cells (col % 4 == 0 &&
+    // row % 4 == 0). Anything near 100% would mean the filter is broken
+    // (the regression that clustered every dot on small windows).
+    final kept4 = dots.where((o) => WorldDotMap.keepDot(o, 4)).length;
+    expect(kept4, lessThan(dots.length ~/ 4));
+    expect(kept4, greaterThan(dots.length ~/ 64));
+    expect(kept4, closeTo(dots.length / 16, dots.length / 16 * 0.2));
+  });
+
   testWidgets('app renders the dot map without errors', (tester) async {
     await tester.runAsync(() async {
       await tester.pumpWidget(const WorldClockApp());

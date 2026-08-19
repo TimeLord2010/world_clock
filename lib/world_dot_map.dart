@@ -49,6 +49,23 @@ class WorldDotMap extends StatefulWidget {
   /// Loads the dot dataset (normalized offsets + geographic coordinates).
   static Future<WorldDotData> loadData() => _dataFuture;
 
+  /// Whether the dot at [normalized] position (unit square) survives
+  /// decimation for the given [stride].
+  ///
+  /// Dots are kept only when their 1°-grid column and row are multiples of
+  /// [stride], so on-screen spacing doubles/quadruples while every kept dot
+  /// stays aligned to the same invisible grid. The dataset sits on integer
+  /// degrees, so `col = (dx*360).round()` and `row = (dy*180).round()` are
+  /// exact (no rounding ambiguity).
+  static bool keepDot(Offset normalized, int stride) {
+    if (stride == 1) {
+      return true;
+    }
+    final col = (normalized.dx * 360).round();
+    final row = (normalized.dy * 180).round();
+    return col % stride == 0 && row % stride == 0;
+  }
+
   static final Future<WorldDotData> _dataFuture = _parseData();
 
   static Future<WorldDotData> _parseData() async {
@@ -169,14 +186,9 @@ class _DotPainter extends CustomPainter {
     ];
 
     final stride = _strideFor(size);
-    final w = size.width;
-    final h = size.height;
     _keptIndices = [
       for (var i = 0; i < normalized.length; i++)
-        if (stride == 1 ||
-            ((normalized[i].dx * 360 / w).round() % stride == 0 &&
-                (normalized[i].dy * 180 / h).round() % stride == 0))
-          i,
+        if (WorldDotMap.keepDot(normalized[i], stride)) i,
     ];
     _cachedSize = size;
   }
@@ -217,8 +229,10 @@ class _DotPainter extends CustomPainter {
     final cellPx = size.width * dpr / 360;
 
     // Diameter rounded to a whole physical pixel so the circles are sharp;
-    // ~0.7 of the effective cell keeps visible gaps between neighbors.
-    var dotPx = (cellPx * stride * 0.7).round();
+    // ~0.5 of the effective cell leaves a visible gap (≈ dot size) between
+    // neighbors at every stride — 0.7 made dots nearly touch, reading as
+    // a clustered blob on small windows.
+    var dotPx = (cellPx * stride * 0.5).round();
     if (dotPx < 1) {
       dotPx = 1;
     }
