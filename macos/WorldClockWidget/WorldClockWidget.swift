@@ -32,34 +32,42 @@ struct Provider: TimelineProvider {
     }
 }
 
-// MARK: - View: the dot-matrix world map, 2:1, pixel-crisp
+// MARK: - View: the dot-matrix world map, filling the whole widget
 
 struct WorldClockWidgetView: View {
-    @Environment(\.widgetFamily) var family
+    @Environment(\.displayScale) var displayScale
     let entry: MapEntry
 
     private static let renderer = WorldDotMapRenderer.loadDefault()
 
-    private var mapSize: CGSize {
-        // Map keeps its 2:1 aspect inside the widget frame.
-        let width: CGFloat = family == .systemSmall ? 160 : 320
-        return CGSize(width: width, height: width / 2)
+    /// Map size that covers [container] while keeping the 2:1 aspect:
+    /// width = max(containerW, 2*containerH). The widget frame then clips
+    /// the overflow, so the map fills the widget edge to edge (no empty
+    /// bands top/bottom or left/right).
+    private func fillSize(_ container: CGSize) -> CGSize {
+        let w = max(container.width, container.height * 2)
+        return CGSize(width: w, height: w / 2)
     }
 
-    private var mapImage: CGImage? {
+    private func mapImage(container: CGSize) -> CGImage? {
         guard let renderer = Self.renderer else { return nil }
-        let dpr = NSScreen.main?.backingScaleFactor ?? 2.0
-        return renderer.render(now: entry.date, width: mapSize.width, height: mapSize.height, dpr: dpr)
+        let size = fillSize(container)
+        let dpr = displayScale > 0 ? displayScale : 2.0
+        return renderer.render(now: entry.date, width: size.width, height: size.height, dpr: dpr)
     }
 
     var body: some View {
-        Group {
-            if let image = mapImage {
-                Image(nsImage: NSImage(cgImage: image, size: mapSize))
-                    .resizable()
-                    .interpolation(.none)
-                    .aspectRatio(2, contentMode: .fit)
+        GeometryReader { geo in
+            Group {
+                if let image = mapImage(container: geo.size) {
+                    Image(nsImage: NSImage(cgImage: image, size: fillSize(geo.size)))
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFill()
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
         .containerBackground(for: .widget) {
             Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
