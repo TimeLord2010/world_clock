@@ -20,7 +20,7 @@ class WorldClockApp extends StatelessWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF111111),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFE6D34),
+          seedColor: const Color(0xFFFF9800),
           brightness: Brightness.dark,
         ),
       ),

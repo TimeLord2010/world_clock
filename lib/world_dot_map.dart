@@ -25,7 +25,7 @@ class WorldDotMap extends StatefulWidget {
   const WorldDotMap({
     super.key,
     this.backgroundColor = const Color(0xFF111111),
-    this.dotColor = const Color(0xFFFE6D34),
+    this.dotColor = const Color(0xFFFF9800),
     this.now,
   });
 
