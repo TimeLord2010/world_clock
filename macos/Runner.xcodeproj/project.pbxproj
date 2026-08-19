@@ -1567,6 +1567,8 @@
 			<string>XCBuildConfiguration</string>
 			<key>buildSettings</key>
 			<dict>
+				<key>CODE_SIGN_ENTITLEMENTS</key>
+				<string>WorldClockWidget/WorldClockWidget.entitlements</string>
 				<key>CODE_SIGN_IDENTITY</key>
 				<string>-</string>
 				<key>CODE_SIGN_STYLE</key>
@@ -1613,6 +1615,8 @@
 			<string>XCBuildConfiguration</string>
 			<key>buildSettings</key>
 			<dict>
+				<key>CODE_SIGN_ENTITLEMENTS</key>
+				<string>WorldClockWidget/WorldClockWidget.entitlements</string>
 				<key>CODE_SIGN_IDENTITY</key>
 				<string>-</string>
 				<key>CODE_SIGN_STYLE</key>
