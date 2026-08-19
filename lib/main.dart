@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'world_dot_map.dart';
@@ -27,8 +29,32 @@ class WorldClockApp extends StatelessWidget {
   }
 }
 
-class WorldMapScreen extends StatelessWidget {
+class WorldMapScreen extends StatefulWidget {
   const WorldMapScreen({super.key});
+
+  @override
+  State<WorldMapScreen> createState() => _WorldMapScreenState();
+}
+
+class _WorldMapScreenState extends State<WorldMapScreen> {
+  DateTime _now = DateTime.now();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keep the day/night boundary moving: refresh the reference instant
+    // once a minute.
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +72,7 @@ class WorldMapScreen extends StatelessWidget {
               child: SizedBox(
                 width: mapWidth,
                 height: mapWidth / 2,
-                child: const WorldDotMap(),
+                child: WorldDotMap(now: _now),
               ),
             );
           },
