@@ -78,10 +78,7 @@ class WorldDotMap extends StatefulWidget {
     return WorldDotData(
       normalized: [
         for (final pair in decoded)
-          Offset(
-            ((pair[0] as num) + 180) / 360,
-            (90 - (pair[1] as num)) / 180,
-          ),
+          Offset(((pair[0] as num) + 180) / 360, (90 - (pair[1] as num)) / 180),
       ],
       geo: [
         for (final pair in decoded)
@@ -162,8 +159,9 @@ class _DotPainter extends CustomPainter {
   static const int _buckets = 32;
 
   /// Minimum dot brightness at night: land stays faintly visible so the
-  /// map shape never fully disappears.
-  static const double _minBrightness = 0.10;
+  /// map shape never fully disappears. 0.10 was too dark against the
+  /// #111111 background; 0.30 keeps a clear "night" look while readable.
+  static const double _minBrightness = 0.30;
 
   List<Offset>? _screenOffsets;
   List<int>? _keptIndices;
@@ -186,7 +184,7 @@ class _DotPainter extends CustomPainter {
     final scaleY = size.height * dpr;
     _screenOffsets = [
       for (final o in normalized)
-        Offset((o.dx * scaleX).round() / dpr, (o.dy * scaleY).round() / dpr),
+        Offset((o.dx * scaleX) / dpr, (o.dy * scaleY) / dpr),
     ];
 
     final stride = _strideFor(size);
