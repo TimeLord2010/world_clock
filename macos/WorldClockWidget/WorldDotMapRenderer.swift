@@ -101,11 +101,15 @@ struct WorldDotMapRenderer {
 
             let t = SunShading.intensity(latDeg: dot.lat, lonDeg: dot.lon, now: now)
             let level = Self.minBrightness + t * (1 - Self.minBrightness)
-            ctx.setFillColor(CGColor(
-                red: backgroundColor.r + (dotColor.r - backgroundColor.r) * level,
-                green: backgroundColor.g + (dotColor.g - backgroundColor.g) * level,
-                blue: backgroundColor.b + (dotColor.b - backgroundColor.b) * level,
-                alpha: 1))
+            // Brightness is encoded in the dot's ALPHA (pure dot color), not
+            // in a color lerp: composited over the #111111 panel this yields
+            // the same shade as the old lerp (orange×α + bg×(1−α)), and when
+            // the system shows the widget in its monochrome treatment
+            // (desktop unfocused) it fills the alpha mask with white — so
+            // the day/night shading survives as gray tones, like Apple's
+            // clock widgets. With uniform alpha it flattened to all-white.
+            ctx.setFillColor(CGColor(red: dotColor.r, green: dotColor.g,
+                                     blue: dotColor.b, alpha: level))
 
             // Pixel-snapped center inside the map rect; CGContext y grows
             // upward, so flip.
