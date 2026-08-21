@@ -14,7 +14,9 @@ struct WorldDotMapRenderer {
     // Identidade visual do app (defaults do WorldDotMap).
     let backgroundColor: (r: Double, g: Double, b: Double) = (17 / 255, 17 / 255, 17 / 255) // #111111
     let dotColor: (r: Double, g: Double, b: Double) = (1.0, 152 / 255, 0) // #FF9800
-    static let minBrightness = 0.10
+    // Parity with the Flutter painter (world_dot_map.dart): 0.30 keeps the
+    // night side readable against #111111 (0.10 was too dark).
+    static let minBrightness = 0.30
 
     private static var cached: (key: String, image: CGImage)?
 
@@ -85,9 +87,11 @@ struct WorldDotMapRenderer {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return emptyImage(width: wPhys, height: hPhys) }
 
-        ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
-                                 blue: backgroundColor.b, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: wPhys, height: hPhys))
+        // NO background fill here: the bitmap must stay TRANSPARENT outside
+        // the dots. The dark #111111 panel comes from the view's
+        // containerBackground; fusing an opaque background into this bitmap
+        // made chronod treat the whole widget as background-only and strip
+        // it (backgroundViewPolicy=Remove) when the desktop loses focus.
 
         ctx.setShouldAntialias(true)
         let half = dotPx / 2

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import WidgetKit
 
@@ -40,9 +39,12 @@ struct WorldClockWidgetView: View {
 
     private static let renderer = WorldDotMapRenderer.loadDefault()
 
+    /// Display scale of the widget surface (fallback 2.0), used both to
+    /// render the bitmap at physical resolution and to size it 1:1.
+    private var dpr: CGFloat { displayScale > 0 ? displayScale : 2.0 }
+
     private func mapImage(container: CGSize) -> CGImage? {
         guard let renderer = Self.renderer else { return nil }
-        let dpr = displayScale > 0 ? displayScale : 2.0
         // The renderer draws the FULL widget canvas (background + map with
         // its internal safety margin), so the view just fills the frame —
         // there is no uncovered area where a system background could show.
@@ -50,12 +52,25 @@ struct WorldClockWidgetView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            if let image = mapImage(container: geo.size) {
-                Image(nsImage: NSImage(cgImage: image, size: geo.size))
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFill()
+        // Canvas draws the bitmap synchronously in the widget's own render
+        // pass — no AppKit NSImage involvement. (Image(nsImage:) with a
+        // runtime-generated image could render blank while the extension
+        // process is suspended in the background, e.g. desktop unfocused.)
+        //
+        // The canvas draws ONLY the dots (transparent elsewhere); the dark
+        // panel comes from containerBackground below. This separation is
+        // what keeps the widget alive: when the desktop loses focus chronod
+        // re-renders desktop widgets with backgroundViewPolicy=Remove
+        // (strips the background layer so the wallpaper shows through). A
+        // single fully-opaque bitmap (map+background fused) leaves nothing
+        // after the strip → blank widget. Real content layers survive.
+        Canvas(opaque: false) { context, size in
+            if let image = mapImage(container: size) {
+                // Image(decorative:scale: dpr) gives the bitmap a point size
+                // equal to the canvas size, so this draw is a 1:1 blit —
+                // no resampling, dots stay crisp.
+                context.draw(Image(decorative: image, scale: dpr),
+                             in: CGRect(origin: .zero, size: size))
             }
         }
         .containerBackground(for: .widget) {
