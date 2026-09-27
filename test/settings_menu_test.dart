@@ -7,12 +7,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:world_clock/main.dart';
 import 'package:world_clock/map_theme.dart';
+import 'package:world_clock/moon_marker.dart';
+import 'package:world_clock/panel_card.dart';
 import 'package:world_clock/settings_menu.dart';
 import 'package:world_clock/world_dot_map.dart';
 
 /// Cores do tema, e a bandeja de opções do canto superior direito: abre por
-/// hover e por clique, o item "Tema" abre o submenu, e escolher um tema troca a
-/// paleta do mapa.
+/// clique, o item "Tema" abre o submenu, e escolher um tema troca a paleta do
+/// mapa. Os dados da Lua NÃO moram aqui (têm teste próprio, no overlay do
+/// marcador): se alguém trouxer o painel de volta, é o teste
+/// "a bandeja não mostra dados da Lua" que quebra.
 void main() {
   group('MapThemes', () {
     test('o tema padrão é exatamente o que o mapa já usava por default', () {
@@ -193,6 +197,22 @@ void main() {
       expect(find.text('Monocromático branco'), findsNothing);
       expect(find.text('Tema'), findsNothing);
     });
+
+    testWidgets('a bandeja não mostra dados da Lua: eles vivem no overlay do '
+        'marcador', (tester) async {
+      await pumpMenu(tester);
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+
+      // A Lua saiu do menu a pedido do usuário: o painel virou overlay no
+      // marcador do mapa (ver moon_marker_test.dart). Este teste é o que
+      // denuncia o painel ressuscitando aqui.
+      expect(find.text('Tema'), findsOneWidget);
+      expect(find.text('Lua'), findsNothing);
+      expect(find.textContaining('% iluminada'), findsNothing);
+      expect(find.text('Próxima cheia'), findsNothing);
+    });
   });
 
   group('swatch do tema', () {
@@ -287,6 +307,54 @@ void main() {
         expect(find.text('Tema'), findsNothing);
 
         // Desmonta para o timer de 30 min da tela ser cancelado.
+        await tester.pumpWidget(const SizedBox());
+      });
+    });
+
+    testWidgets('hover no marcador da Lua não repinta os pontos do mapa', (
+      tester,
+    ) async {
+      // A prova de que o overlay podia ser por hover (ao contrário do menu, que
+      // só abre por clique): o rebuild que o hover provoca chega ao mapa com os
+      // MESMOS dados, então o `shouldRepaint` do pintor dos pontos devolve
+      // falso e as dezenas de milhares de pontos não são redesenhadas. Este
+      // teste é o contrato disso — se o hover voltar a sujar o mapa, quebra.
+      await tester.runAsync(() async {
+        await tester.pumpWidget(const WorldClockApp());
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+
+        CustomPainter painterOfMap() {
+          final finder = find.descendant(
+            of: find.byType(WorldDotMap),
+            matching: find.byType(CustomPaint),
+          );
+          expect(finder, findsOneWidget);
+          return tester.widget<CustomPaint>(finder).painter!;
+        }
+
+        final before = painterOfMap();
+
+        final gesture = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.addPointer(location: const Offset(1, 1));
+        addTearDown(gesture.removePointer);
+        await tester.pump();
+        await gesture.moveTo(tester.getCenter(find.byType(MoonDisc)));
+        await tester.pumpAndSettle();
+
+        // O overlay abriu…
+        expect(find.byType(PanelCard), findsOneWidget);
+
+        // …e o pintor dos pontos continua idêntico: nada a repintar.
+        final after = painterOfMap();
+        expect(
+          after.shouldRepaint(before),
+          isFalse,
+          reason: 'o rebuild do hover não pode sujar os pontos do mapa',
+        );
+
         await tester.pumpWidget(const SizedBox());
       });
     });
