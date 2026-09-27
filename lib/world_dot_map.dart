@@ -133,6 +133,53 @@ class WorldDotMap extends StatefulWidget {
 
   static final Future<WorldDotData> _dataFuture = _parseData();
 
+  /// Smallest dot diameter worth drawing, in logical points.
+  ///
+  /// The decimation step is derived from THIS floor, not from the size of the
+  /// grid cell (the previous rule: cell >= 4 px / 2 px). The old rule changed
+  /// step only once the cell got small, which is exactly when the map is at its
+  /// densest, so the dots had already shrunk to 2 physical pixels (1 pt on a
+  /// Retina display) before anything happened — the "too small to see" state.
+  static const double minDotPt = 1.5;
+
+  /// Largest decimation step: beyond this the map loses its shape, so the dot
+  /// keeps its [minDotPt] floor instead of stepping up again.
+  static const int maxStride = 8;
+
+  /// Decimation step for a map [mapWidthPt] logical points wide.
+  ///
+  /// The smallest power of two that leaves an on-screen spacing of at least
+  /// twice [minDotPt] — with a dot at half the spacing, that guarantees the
+  /// dot never falls below the floor. Measured in logical points (not physical
+  /// pixels), so the promise holds on any display density: on the 360-column
+  /// grid the step goes 1 → 2 → 4 → 8 at 1080 / 540 / 270 / 135 pt.
+  static int strideFor(double mapWidthPt) {
+    if (!(mapWidthPt > 0)) {
+      // Degenerate layout (zero, negative, NaN): no room to draw — step all
+      // the way up instead of spinning here.
+      return maxStride;
+    }
+    final cellPt = mapWidthPt / gridColumns;
+    var stride = 1;
+    while (stride < maxStride && cellPt * stride < 2 * minDotPt) {
+      stride *= 2;
+    }
+    return stride;
+  }
+
+  /// Diameter of every dot, in PHYSICAL pixels, for a map [mapWidthPt]
+  /// logical points wide on a [dpr] display drawn with [stride].
+  ///
+  /// Half of the on-screen spacing — dots and gaps stay visually equal — but
+  /// never below [minDotPt]. Rounded to whole physical pixels: sub-pixel
+  /// circles are what made the small windows look like dust.
+  static int dotDiameterPx(double mapWidthPt, double dpr, int stride) {
+    final spacingPx = mapWidthPt * dpr / gridColumns * stride;
+    final floorPx = (minDotPt * dpr).round();
+    final dotPx = (spacingPx * 0.5).round();
+    return dotPx < floorPx ? floorPx : dotPx;
+  }
+
   static Future<WorldDotData> _parseData() async {
     final raw = await rootBundle.loadString('assets/world_dots.json');
     final decoded = jsonDecode(raw) as List<dynamic>;
@@ -334,29 +381,15 @@ class _DotPainter extends CustomPainter {
   late final _DotLayer _land;
   late final _DotLayer _ocean;
 
-  /// Adaptive decimation: when the window gets small the grid cells shrink
-  /// and dots would nearly touch. Keep the density comfortable by drawing
-  /// every 2nd (or 4th) dot in each direction, which doubles/quadruples the
-  /// on-screen spacing while staying perfectly aligned to the same grid.
-  int _strideFor(Size size) {
-    final cellPx = size.width * devicePixelRatio / WorldDotMap.gridColumns;
-    return cellPx >= 4 ? 1 : (cellPx >= 2 ? 2 : 4);
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     final dpr = devicePixelRatio;
-    final stride = _strideFor(size);
-    final cellPx = size.width * dpr / WorldDotMap.gridColumns;
+    final stride = WorldDotMap.strideFor(size.width);
 
-    // Diameter rounded to a whole physical pixel so the circles are sharp;
-    // ~0.5 of the effective cell leaves a visible gap (≈ dot size) between
-    // neighbors at every stride — 0.7 made dots nearly touch, reading as
-    // a clustered blob on small windows.
-    var dotPx = (cellPx * stride * 0.5).round();
-    if (dotPx < 1) {
-      dotPx = 1;
-    }
+    // Diameter rounded to a whole physical pixel so the circles are sharp,
+    // and floored at WorldDotMap.minDotPt so a cramped window degrades the
+    // DENSITY (fewer dots, via the step) instead of the dot size.
+    final dotPx = WorldDotMap.dotDiameterPx(size.width, dpr, stride);
     final strokeWidth = dotPx / dpr;
 
     _land.ensureLayout(size, dpr, stride);
