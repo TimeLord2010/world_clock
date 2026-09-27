@@ -3,7 +3,7 @@
 World clock app: a dot-matrix world map with real solar illumination
 (places in daylight are bright orange, night places fade into the dark
 gray background). The day/night terminator moves with the sun — refreshed
-every 30 minutes.
+every 15 minutes.
 
 - Flutter app (`lib/`): dot grid from `assets/world_dots.json` (Natural
   Earth, public domain), solar shading computed in `lib/world_sun.dart`,

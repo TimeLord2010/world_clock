@@ -306,7 +306,7 @@ void main() {
         expect(map.backgroundColor, MapThemes.monoWhite.background);
         expect(find.text('Tema'), findsNothing);
 
-        // Desmonta para o timer de 30 min da tela ser cancelado.
+        // Desmonta para o timer de 15 min da tela ser cancelado.
         await tester.pumpWidget(const SizedBox());
       });
     });

@@ -56,12 +56,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   void initState() {
     super.initState();
     // Keep the day/night boundary moving: refresh the reference instant
-    // every 30 minutes (the sun moves ~7.5° of longitude in that window,
+    // every 15 minutes (the sun moves ~3.75° of longitude in that window,
     // clearly visible on screen; per-minute updates are imperceptible).
-    _ticker = Timer.periodic(const Duration(minutes: 30), (_) {
+    _ticker = Timer.periodic(const Duration(minutes: 15), (_) {
       setState(() {
         _now = DateTime.now();
-        // A Lua anda ~0,28° em 30 min — menos de 1 px no mapa, então o mesmo
+        // A Lua anda ~0,14° em 15 min — menos de 1 px no mapa, então o mesmo
         // tique serve para ela. Se um dia quiser movimento contínuo, o
         // marcador está FORA do RepaintBoundary do mapa: dá para atualizá-lo
         // sozinho, sem repintar os pontos.
