@@ -88,27 +88,37 @@ struct WorldDotMapRenderer {
     }
 
     /// Renders the map for instant [now] into physical pixels
-    /// (width/height logical × dpr). Cached per (minute, size).
+    /// (width/height logical × dpr). Cached per (minute, size, window).
     ///
-    /// The bitmap covers the whole widget: the `#111111` background fills
-    /// every pixel, and the 2:1 map is drawn centered inside with a small
-    /// safety margin. The margin is part of OUR drawing — there is no area
-    /// where the system widget background could show through.
-    func render(now: Date, width: CGFloat, height: CGFloat, dpr: CGFloat) -> CGImage {
+    /// The bitmap covers the whole widget: the dot field is centered inside
+    /// with a small safety inset, and the dark panel comes from the view's
+    /// containerBackground — no area is left for a system background.
+    ///
+    /// [marginPt] is the safety inset and [latBottom] is the southern edge of
+    /// the latitude window. The projection is uniform (equirectangular), so
+    /// the window's aspect fixes the map's aspect: the full ±90 world is
+    /// exactly 2:1, while the wide widget drops the empty band below the last
+    /// land dot and matches its own frame instead (see `WidgetLayout`).
+    func render(now: Date, width: CGFloat, height: CGFloat, dpr: CGFloat,
+                marginPt: Double = 5, latBottom: Double = -90) -> CGImage {
         let wPhys = Int((Double(width) * Double(dpr)).rounded())
         let hPhys = Int((Double(height) * Double(dpr)).rounded())
         guard wPhys > 0, hPhys > 0 else { return emptyImage(width: wPhys, height: hPhys) }
 
         let minute = Int(now.timeIntervalSince1970 / 60)
-        let key = "\(minute)-\(wPhys)x\(hPhys)"
+        let key = "\(minute)-\(wPhys)x\(hPhys)-\(marginPt)-\(latBottom)"
         if let c = Self.cached, c.key == key { return c.image }
 
-        // Safety margin inside our own canvas (5pt logical).
-        let marginPx = max(1, (5 * Double(dpr)).rounded())
+        let latTop = 90.0
+        let span = latTop - latBottom            // degrees of latitude shown
+        let aspect = 360 / span                  // width : height (uniform)
+
+        // Safety inset inside our own canvas, in logical points.
+        let marginPx = max(0, (marginPt * Double(dpr)).rounded())
         let availW = Double(wPhys) - 2 * marginPx
         let availH = Double(hPhys) - 2 * marginPx
-        let mapW = min(availW, availH * 2)
-        let mapH = mapW / 2
+        let mapW = min(availW, availH * aspect)
+        let mapH = mapW / aspect
         let originX = (Double(wPhys) - mapW) / 2
         let originY = (Double(hPhys) - mapH) / 2
 
@@ -136,10 +146,12 @@ struct WorldDotMapRenderer {
         // Ocean first: land is drawn on top of the water.
         paint(cells: ocean, color: oceanColor, minBrightness: Self.oceanMinBrightness,
               ctx: ctx, now: now, stride: stride, dotPx: dotPx,
-              originX: originX, originY: originY, mapW: mapW, mapH: mapH, hPhys: hPhys)
+              originX: originX, originY: originY, mapW: mapW, mapH: mapH, hPhys: hPhys,
+              latTop: latTop, latBottom: latBottom, span: span)
         paint(cells: dots, color: dotColor, minBrightness: Self.minBrightness,
               ctx: ctx, now: now, stride: stride, dotPx: dotPx,
-              originX: originX, originY: originY, mapW: mapW, mapH: mapH, hPhys: hPhys)
+              originX: originX, originY: originY, mapW: mapW, mapH: mapH, hPhys: hPhys,
+              latTop: latTop, latBottom: latBottom, span: span)
 
         let image = ctx.makeImage() ?? emptyImage(width: wPhys, height: hPhys)
         Self.cached = (key, image)
@@ -161,10 +173,14 @@ struct WorldDotMapRenderer {
                        minBrightness: Double,
                        ctx: CGContext, now: Date, stride: Int, dotPx: Double,
                        originX: Double, originY: Double,
-                       mapW: Double, mapH: Double, hPhys: Int) {
+                       mapW: Double, mapH: Double, hPhys: Int,
+                       latTop: Double, latBottom: Double, span: Double) {
         let half = dotPx / 2
 
         for dot in cells {
+            // Cells south of the widget's latitude window are outside the
+            // drawing (the app keeps the full ±90 world).
+            guard dot.lat >= latBottom else { continue }
             guard keepDot(lon: dot.lon, lat: dot.lat, stride: stride) else { continue }
 
             let t = SunShading.intensity(latDeg: dot.lat, lonDeg: dot.lon, now: now)
@@ -175,7 +191,7 @@ struct WorldDotMapRenderer {
             // Pixel-snapped center inside the map rect; CGContext y grows
             // upward, so flip.
             let x = (originX + (dot.lon + 180) / 360 * mapW).rounded()
-            let yScreen = (originY + (90 - dot.lat) / 180 * mapH).rounded()
+            let yScreen = (originY + (latTop - dot.lat) / span * mapH).rounded()
             let y = Double(hPhys) - yScreen
             ctx.fillEllipse(in: CGRect(x: x - half, y: y - half, width: dotPx, height: dotPx))
         }

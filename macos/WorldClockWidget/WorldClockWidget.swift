@@ -33,6 +33,41 @@ struct Provider: TimelineProvider {
 
 // MARK: - View: renders the widget-sized bitmap edge to edge
 
+/// Layout of the dot map inside the widget frame.
+///
+/// The frame and the projection have different aspects, and a plain
+/// aspect-fit leaves a dark band — the visible "padding" — on two sides.
+/// The widget fixes that WITHOUT cropping the map, using two knobs:
+///
+/// 1. **Latitude window.** A uniform equirectangular map of the whole world
+///    is exactly 2:1 (360° x 180°), while the wide widget frame is ~2.1:1.
+///    Below the last land dot (-55.5°) the dataset has no topography at all:
+///    the southern band is just the faint ocean grid — the void where
+///    Antarctica would be. The widget drops that band and widens the window
+///    until its aspect matches its own frame, so the map fills the frame edge
+///    to edge with no distortion and no dot lost. The app keeps ±90.
+/// 2. **Safety inset.** 2 pt is the smallest inset that keeps every LAND dot
+///    clear of the rounded-corner mask (measured against the real dataset:
+///    at 1 pt the dateline dots at lon ±179.5, lat 66-71 fall under the
+///    corner curve; at 0 pt they are rounded away).
+enum WidgetLayout {
+    /// Latitude window (top = 90 always) matched to the frame's aspect.
+    ///
+    /// Clamped so it never exceeds the whole world (a square frame therefore
+    /// keeps the full 2:1 map, as before) and never reaches the southern
+    /// land, which runs down to -55.5.
+    static func latitudeWindow(container: CGSize, inset: CGFloat) -> (top: Double, bottom: Double) {
+        let w = Double(container.width - 2 * inset)
+        let h = Double(container.height - 2 * inset)
+        guard w > 0, h > 0 else { return (90, -90) }
+        let span = min(max(360 * h / w, 150), 180)
+        return (90, 90 - span)
+    }
+
+    /// Safety inset in logical points (see above).
+    static let inset: CGFloat = 2
+}
+
 struct WorldClockWidgetView: View {
     @Environment(\.displayScale) var displayScale
     let entry: MapEntry
@@ -43,12 +78,15 @@ struct WorldClockWidgetView: View {
     /// render the bitmap at physical resolution and to size it 1:1.
     private var dpr: CGFloat { displayScale > 0 ? displayScale : 2.0 }
 
-    private func mapImage(container: CGSize) -> CGImage? {
+    private func mapImage(container: CGSize, window: (top: Double, bottom: Double)) -> CGImage? {
         guard let renderer = Self.renderer else { return nil }
-        // The renderer draws the FULL widget canvas (background + map with
-        // its internal safety margin), so the view just fills the frame —
-        // there is no uncovered area where a system background could show.
-        return renderer.render(now: entry.date, width: container.width, height: container.height, dpr: dpr)
+        // The renderer draws the map over the whole canvas with its internal
+        // safety inset, so the view just fills the frame — there is no
+        // uncovered area where a system background could show.
+        return renderer.render(now: entry.date, width: container.width,
+                               height: container.height, dpr: dpr,
+                               marginPt: Double(WidgetLayout.inset),
+                               latBottom: window.bottom)
     }
 
     var body: some View {
@@ -65,7 +103,8 @@ struct WorldClockWidgetView: View {
         // single fully-opaque bitmap (map+background fused) leaves nothing
         // after the strip → blank widget. Real content layers survive.
         Canvas(opaque: false) { context, size in
-            if let image = mapImage(container: size) {
+            let window = WidgetLayout.latitudeWindow(container: size, inset: WidgetLayout.inset)
+            if let image = mapImage(container: size, window: window) {
                 // Image(decorative:scale: dpr) gives the bitmap a point size
                 // equal to the canvas size, so this draw is a 1:1 blit —
                 // no resampling, dots stay crisp.
