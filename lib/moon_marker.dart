@@ -168,32 +168,42 @@ class _MoonMarkerState extends State<MoonMarker> {
               ),
             ),
             PanelInfoRow(label: 'Fase', value: status.phase.label),
-            // O número da idade não se explica sozinho: "Cheia · 16,7 dias" fez
-            // o usuário bater o olho e não entender de onde vinha o 16,7 — o
-            // rótulo agora diz. É o tempo decorrido desde a última lua nova, ou
-            // seja, onde a Lua está no ciclo (0 = nova, ~14,8 = cheia).
-            PanelInfoRow(
-              label: 'Desde a lua nova',
-              value: '${formatDecimal(status.ageDays)} dias',
-            ),
             PanelInfoRow(
               label: 'Distância',
               value: '${formatThousands(status.distanceKm.round())} km',
             ),
-            PanelInfoRow(
-              label: 'Próxima cheia',
-              value: formatUtcStamp(status.nextFullMoon),
-              dimValue: true,
-            ),
-            PanelInfoRow(
-              label: 'Próxima nova',
-              value: formatUtcStamp(status.nextNewMoon),
-              dimValue: true,
-            ),
+            // As próximas datas saem em ordem CRONOLÓGICA, e só com a data: são
+            // "o que vem depois", e a ordem fixa (nova, 50%, cheia) faria a
+            // linha do meio aparecer ANTES da de cima na metade minguante do mês
+            // — o 50% minguante acontece antes da próxima nova. A hora
+            // ("04:13 UTC") não muda nada para quem olha o painel.
+            for (final (label, date) in _upcoming(status))
+              PanelInfoRow(
+                label: label,
+                value: formatDate(date),
+                dimValue: true,
+              ),
           ],
         ),
       ),
     );
+  }
+
+  /// As três próximas datas — nova, 50% e cheia — em ordem cronológica.
+  ///
+  /// O rótulo do 50% diz o lado da passagem porque são DUAS por mês sinódico:
+  /// crescente (entre a nova e a cheia) e minguante (entre a cheia e a nova).
+  static List<(String, DateTime)> _upcoming(MoonStatus status) {
+    final events = [
+      ('Próxima nova', status.nextNewMoon),
+      ('Próxima cheia', status.nextFullMoon),
+      (
+        status.nextHalfMoon.waxing ? '50% crescente' : '50% minguante',
+        status.nextHalfMoon.when,
+      ),
+    ];
+    events.sort((a, b) => a.$2.compareTo(b.$2));
+    return events;
   }
 }
 

@@ -121,9 +121,13 @@ String formatThousands(int value) {
   return out.toString();
 }
 
-/// Instante em UTC, curto: `26/10 04:13 UTC`.
-String formatUtcStamp(DateTime when) {
-  final utc = when.toUtc();
+/// Data curta do calendário local: `18/10/2026`.
+///
+/// Data **local** e não UTC: sem a hora, um carimbo UTC cairia no dia anterior
+/// quando a sizígia acontece de madrugada em UTC (00:00–03:00 UTC é 21:00–24:00
+/// em Brasília) — o dia que o usuário vê no calendário dele é o local.
+String formatDate(DateTime when) {
+  final local = when.toLocal();
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${two(utc.day)}/${two(utc.month)} ${two(utc.hour)}:${two(utc.minute)} UTC';
+  return '${two(local.day)}/${two(local.month)}/${local.year}';
 }

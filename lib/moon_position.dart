@@ -58,6 +58,7 @@ class MoonStatus {
     required this.nextFullMoon,
     required this.nextNewMoon,
     required this.lastNewMoon,
+    required this.nextHalfMoon,
   });
 
   /// Latitude do ponto onde a Lua está a pino, em graus (+N).
@@ -98,6 +99,13 @@ class MoonStatus {
   /// Última lua nova (UTC) — a idade sinódica conta a partir dela.
   final DateTime lastNewMoon;
 
+  /// Próximo instante de **50% de iluminação** (UTC) e por qual lado a Lua
+  /// passa por ele: `waxing` = crescente (quarto crescente); senão minguante.
+  ///
+  /// São DUAS passagens de 50% por mês sinódico — uma entre a nova e a cheia,
+  /// outra entre a cheia e a nova — e esta é a próxima, seja qual for.
+  final ({DateTime when, bool waxing}) nextHalfMoon;
+
   /// Fração iluminada como porcentagem, para a interface.
   double get illuminationPercent => illumination * 100;
 
@@ -131,6 +139,7 @@ abstract final class MoonPosition {
     final nextFull = _crossing(180, utc, forward: true);
     final nextNew = _crossing(0, utc, forward: true);
     final lastNew = _crossing(0, utc, forward: false);
+    final nextHalf = _halfMoon(utc);
 
     return MoonStatus(
       subLatDeg: dec / _deg,
@@ -145,6 +154,7 @@ abstract final class MoonPosition {
       nextFullMoon: nextFull,
       nextNewMoon: nextNew,
       lastNewMoon: lastNew,
+      nextHalfMoon: nextHalf,
     );
   }
 
@@ -340,12 +350,19 @@ abstract final class MoonPosition {
     return _phase(_moonEcliptic(t), _sunEcliptic(t)).$2;
   }
 
+  /// Fração iluminada no instante [utc] — a mesma avaliação completa, usada
+  /// pela busca dos 50%.
+  static double _illuminationAt(DateTime utc) {
+    final t = _centuries(utc);
+    return _phase(_moonEcliptic(t), _sunEcliptic(t)).$1;
+  }
+
   /// Instante em que a elongação cruza [targetDeg], indo para frente
   /// ([forward]) ou para trás no tempo.
   ///
   /// Varredura grossa de 6 h (a elongação anda ~12,19°/dia, então nenhum
-  /// cruzamento é pulado) até achar a troca de sinal, e depois bisseção — 30
-  /// passos deixam o instante bem abaixo de 1 s.
+  /// cruzamento é pulado) até achar a troca de sinal, e depois bisseção em
+  /// [_bisect] — 30 passos deixam o instante bem abaixo de 1 s.
   static DateTime _crossing(
     double targetDeg,
     DateTime from, {
@@ -365,22 +382,7 @@ abstract final class MoonPosition {
       final fb = deviation(b);
       final crossed = forward ? (fa <= 0 && fb > 0) : (fa > 0 && fb <= 0);
       if (crossed) {
-        var lo = a, hi = b, flo = fa;
-        for (var k = 0; k < 30; k++) {
-          final mid = lo.add(
-            Duration(microseconds: hi.difference(lo).inMicroseconds ~/ 2),
-          );
-          final fm = deviation(mid);
-          if ((flo <= 0) == (fm <= 0)) {
-            lo = mid;
-            flo = fm;
-          } else {
-            hi = mid;
-          }
-        }
-        return lo.add(
-          Duration(microseconds: hi.difference(lo).inMicroseconds ~/ 2),
-        );
+        return _bisect(a, fa, b, deviation);
       }
       a = b;
       fa = fb;
@@ -388,6 +390,62 @@ abstract final class MoonPosition {
     // Inalcançável para as sizígias (o mês sinódico cabe em 30 dias); devolve o
     // fim da varredura em vez de lançar — o desenho não depende disto.
     return a;
+  }
+
+  /// Próximo cruzamento de **50% de iluminação** depois de [from], com o lado
+  /// por onde a Lua passa: `waxing` = foi de menos de 50% para mais.
+  ///
+  /// A condição é a iluminação de verdade, **não** a elongação em 90°: o
+  /// "quarto" dos almanaques é a elongação reta e cai ~20 min DEPOIS do 50%
+  /// real (no instante do meio vale `cos elong = R/dist` → 89,85°, porque o Sol
+  /// não está no infinito). O painel mostra a iluminação, então é ela que a
+  /// busca usa. Duas passagens por mês sinódico, sempre a ~14,8 dias uma da
+  /// outra — nenhuma é pulada pela varredura de 6 h.
+  static ({DateTime when, bool waxing}) _halfMoon(DateTime from) {
+    double deviation(DateTime t) => _illuminationAt(t) - 0.5;
+
+    var a = from;
+    var fa = deviation(a);
+    for (var i = 0; i < 200; i++) {
+      final b = a.add(const Duration(hours: 6));
+      final fb = deviation(b);
+      if (fa <= 0 && fb > 0) {
+        return (when: _bisect(a, fa, b, deviation), waxing: true);
+      }
+      if (fa > 0 && fb <= 0) {
+        return (when: _bisect(a, fa, b, deviation), waxing: false);
+      }
+      a = b;
+      fa = fb;
+    }
+    // Inalcançável: as duas passagens de 50% ficam a ~14,8 dias de distância.
+    // Devolve o fim da varredura em vez de lançar, como as sizígias.
+    return (when: a, waxing: true);
+  }
+
+  /// Bisseção entre [lo] (desvio [flo]) e [hi], cujo desvio tem o outro sinal:
+  /// 30 passos deixam o instante bem abaixo de 1 s.
+  static DateTime _bisect(
+    DateTime lo,
+    double flo,
+    DateTime hi,
+    double Function(DateTime) deviation,
+  ) {
+    for (var k = 0; k < 30; k++) {
+      final mid = lo.add(
+        Duration(microseconds: hi.difference(lo).inMicroseconds ~/ 2),
+      );
+      final fm = deviation(mid);
+      if ((flo <= 0) == (fm <= 0)) {
+        lo = mid;
+        flo = fm;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo.add(
+      Duration(microseconds: hi.difference(lo).inMicroseconds ~/ 2),
+    );
   }
 
   // ------------------------------------------------------- tempo e esferas

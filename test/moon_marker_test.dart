@@ -6,6 +6,13 @@ import 'package:world_clock/moon_marker.dart';
 import 'package:world_clock/moon_position.dart';
 import 'package:world_clock/panel_card.dart';
 
+/// `18/10/2026` → `DateTime(2026, 10, 18)` — a data já vem no calendário local,
+/// então não há fuso a aplicar.
+DateTime _parseDate(String value) {
+  final parts = value.split('/').map(int.parse).toList();
+  return DateTime(parts[2], parts[1], parts[0]);
+}
+
 /// O marcador da Lua: a POSIÇÃO no mapa (a projeção tem de ser a mesma do
 /// dataset de pontos), a direção da luz (o lado iluminado aponta para o Sol) e
 /// o overlay que abre com o ponteiro em cima do disco.
@@ -35,6 +42,7 @@ void main() {
     nextFullMoon: base.nextFullMoon,
     nextNewMoon: base.nextNewMoon,
     lastNewMoon: base.lastNewMoon,
+    nextHalfMoon: base.nextHalfMoon,
   );
 
   /// Retângulo do disco DO MAPA — o overlay também tem um disco (a fase em
@@ -208,20 +216,54 @@ void main() {
       );
       expect(find.text('Fase'), findsOneWidget);
       expect(find.text('Cheia'), findsOneWidget);
-      // A idade da Lua tem rótulo explícito: "Cheia · 16,7 dias" não dizia de
-      // onde vinha o 16,7 — quem bate o olho não entende.
-      expect(find.text('Desde a lua nova'), findsOneWidget);
-      expect(find.textContaining(RegExp(r'^\d{1,2},\d dias$')), findsOneWidget);
+      // A idade da Lua saiu do painel: "Desde a lua nova · 16,7 dias" não
+      // agregou (pedido do usuário, 27/09/2026) — a linha voltar é a regressão
+      // que este teste denuncia.
+      expect(find.text('Desde a lua nova'), findsNothing);
+      expect(find.textContaining(RegExp(r'^\d{1,2},\d dias$')), findsNothing);
       // A linha de subponto saiu: a coordenada não agrega para quem só quer
       // saber a fase (o subponto continua sendo o que posiciona o marcador).
       expect(find.text('Subponto'), findsNothing);
       expect(find.textContaining(RegExp(r'^\d{3}\.\d{3} km$')), findsOneWidget);
+      // Três próximas datas — nova, 50% e cheia — e SÓ a data: a hora saiu a
+      // pedido do usuário ("não é relevante, somente a data").
       expect(
-        find.textContaining(RegExp(r'^\d{2}/\d{2} \d{2}:\d{2} UTC$')),
-        findsNWidgets(2), // próxima cheia e próxima nova
+        find.textContaining(RegExp(r'^\d{2}/\d{2}/\d{4}$')),
+        findsNWidgets(3),
+      );
+      expect(find.textContaining('UTC'), findsNothing);
+      // O 50% entra com o lado da passagem no rótulo: são duas por mês sinódico.
+      expect(
+        find.textContaining(RegExp(r'^50% (crescente|minguante)$')),
+        findsOneWidget,
       );
       // Dois discos: o do mapa e o da fase, dentro do próprio overlay.
       expect(find.byType(MoonDisc), findsNWidgets(2));
+    });
+
+    testWidgets('as três próximas datas saem em ordem cronológica', (
+      tester,
+    ) async {
+      // 27/09/2026 é minguante: o próximo 50% (03/10) acontece ANTES da próxima
+      // nova (10/10). É o caso que denuncia ordem de linha fixa no código (nova,
+      // 50%, cheia) em vez de cronológica.
+      await pumpMarker(tester, statusWith(lat: 0, lon: 0));
+      await mouseAt(tester, discRect(tester).center);
+
+      final rows = tester
+          .widgetList<PanelInfoRow>(find.byType(PanelInfoRow))
+          .where((row) => RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(row.value))
+          .toList();
+      expect(rows.length, 3);
+      final dates = rows.map((row) => _parseDate(row.value)).toList();
+      expect(
+        dates[0].isBefore(dates[1]) && dates[1].isBefore(dates[2]),
+        isTrue,
+        reason: 'datas fora de ordem: ${rows.map((r) => r.value).join(", ")}',
+      );
+      expect(rows[0].label, '50% minguante');
+      expect(rows[1].label, 'Próxima nova');
+      expect(rows[2].label, 'Próxima cheia');
     });
 
     testWidgets('o overlay fecha quando o ponteiro sai do disco', (
