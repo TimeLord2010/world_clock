@@ -7,8 +7,11 @@ void main() {
   test('dot dataset loads with valid normalized coordinates', () async {
     final dots = await WorldDotMap.loadDots();
 
-    expect(dots.length, greaterThan(10000),
-        reason: 'dataset should contain a full-world dot grid');
+    expect(
+      dots.length,
+      greaterThan(10000),
+      reason: 'dataset should contain a full-world dot grid',
+    );
     for (final o in dots) {
       expect(o.dx, inInclusiveRange(0, 1));
       expect(o.dy, inInclusiveRange(0, 1));
