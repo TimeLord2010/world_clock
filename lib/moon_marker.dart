@@ -172,15 +172,24 @@ class _MoonMarkerState extends State<MoonMarker> {
               label: 'Distância',
               value: '${formatThousands(status.distanceKm.round())} km',
             ),
-            // As próximas datas saem em ordem CRONOLÓGICA, e só com a data: são
-            // "o que vem depois", e a ordem fixa (nova, 50%, cheia) faria a
-            // linha do meio aparecer ANTES da de cima na metade minguante do mês
-            // — o 50% minguante acontece antes da próxima nova. A hora
+            // As três próximas fases saem em ordem CRONOLÓGICA, com o DESENHO da
+            // fase no lugar do rótulo e só a data: são "o que vem depois", e a
+            // ordem fixa do ciclo faria uma linha ter data anterior à de cima na
+            // metade minguante do mês (o 50% minguante acontece antes da próxima
+            // nova). Quem distingue o 50% crescente do minguante é o LADO
+            // iluminado do disco, na mesma convenção do disco do mapa. A hora
             // ("04:13 UTC") não muda nada para quem olha o painel.
-            for (final (label, date) in _upcoming(status))
+            for (final event in _upcoming(status))
               PanelInfoRow(
-                label: label,
-                value: formatDate(date),
+                leading: Semantics(
+                  label: _eventLabel(event),
+                  child: MoonDisc(
+                    illumination: event.illumination,
+                    diameter: 14,
+                    litDirectionRad: event.litDirectionRad,
+                  ),
+                ),
+                value: formatDate(event.at),
                 dimValue: true,
               ),
           ],
@@ -189,23 +198,43 @@ class _MoonMarkerState extends State<MoonMarker> {
     );
   }
 
-  /// As três próximas datas — nova, 50% e cheia — em ordem cronológica.
+  /// As três próximas fases — nova, 50% e cheia — em ordem cronológica.
   ///
-  /// O rótulo do 50% diz o lado da passagem porque são DUAS por mês sinódico:
-  /// crescente (entre a nova e a cheia) e minguante (entre a cheia e a nova).
-  static List<(String, DateTime)> _upcoming(MoonStatus status) {
-    final events = [
-      ('Próxima nova', status.nextNewMoon),
-      ('Próxima cheia', status.nextFullMoon),
+  /// O 50% aparece DUAS vezes por mês sinódico (crescente, entre a nova e a
+  /// cheia; minguante, entre a cheia e a nova), então o lado iluminado faz
+  /// parte do desenho do evento.
+  static List<_PhaseEvent> _upcoming(MoonStatus status) {
+    final events = <_PhaseEvent>[
+      (illumination: 0, litDirectionRad: 0, at: status.nextNewMoon),
+      (illumination: 1, litDirectionRad: 0, at: status.nextFullMoon),
       (
-        status.nextHalfMoon.waxing ? '50% crescente' : '50% minguante',
-        status.nextHalfMoon.when,
+        illumination: 0.5,
+        litDirectionRad: status.nextHalfMoon.waxing ? 0 : pi,
+        at: status.nextHalfMoon.when,
       ),
     ];
-    events.sort((a, b) => a.$2.compareTo(b.$2));
+    events.sort((a, b) => a.at.compareTo(b.at));
     return events;
   }
+
+  /// O nome do evento, para leitor de tela — o painel mostra só o desenho.
+  static String _eventLabel(_PhaseEvent event) => switch (event.illumination) {
+    <= 0.01 => 'Próxima lua nova',
+    >= 0.99 => 'Próxima lua cheia',
+    _ =>
+      event.litDirectionRad == 0
+          ? 'Próxima metade crescente'
+          : 'Próxima metade minguante',
+  };
 }
+
+/// Um evento de fase no painel: como desenhar o disco ([illumination] e
+/// [litDirectionRad], os mesmos parâmetros de [MoonDisc]) e quando ele acontece.
+typedef _PhaseEvent = ({
+  double illumination,
+  double litDirectionRad,
+  DateTime at,
+});
 
 /// O disco da Lua com a fase desenhada: a parte iluminada é branca, a escura é
 /// só um véu claro sobre o que está atrás, e um anel escuro separa o disco do

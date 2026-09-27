@@ -61,19 +61,27 @@ class PanelCard extends StatelessWidget {
   }
 }
 
-/// Linha de dados de um painel: rótulo à esquerda, valor à direita.
+/// Linha de dados de um painel: rótulo (ou ícone) à esquerda, valor à direita.
 ///
 /// Sem `GestureDetector`/cursor de clique de propósito: são dados, não opções —
 /// o cursor de mão aqui prometeria um clique que não existe.
 class PanelInfoRow extends StatelessWidget {
   const PanelInfoRow({
     super.key,
-    required this.label,
+    this.label,
     required this.value,
     this.dimValue = false,
-  });
+    this.leading,
+  }) : assert(
+         (label == null) != (leading == null),
+         'a linha leva rótulo em texto OU ícone, nunca os dois nem nenhum',
+       );
 
-  final String label;
+  /// Rótulo em texto, à esquerda.
+  final String? label;
+
+  /// Ícone no lugar do rótulo — o painel da Lua usa o DESENHO da fase aqui.
+  final Widget? leading;
   final String value;
 
   /// Valor em tom secundário (para data/hora, por exemplo).
@@ -86,10 +94,11 @@ class PanelInfoRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, color: PanelCard.dimTextColor),
-          ),
+          leading ??
+              Text(
+                label!,
+                style: TextStyle(fontSize: 13, color: PanelCard.dimTextColor),
+              ),
           const SizedBox(width: 20),
           Text(
             value,

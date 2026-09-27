@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -225,25 +227,29 @@ void main() {
       // saber a fase (o subponto continua sendo o que posiciona o marcador).
       expect(find.text('Subponto'), findsNothing);
       expect(find.textContaining(RegExp(r'^\d{3}\.\d{3} km$')), findsOneWidget);
-      // Três próximas datas — nova, 50% e cheia — e SÓ a data: a hora saiu a
+      // Três próximas fases — nova, 50% e cheia — e SÓ a data: a hora saiu a
       // pedido do usuário ("não é relevante, somente a data").
       expect(
         find.textContaining(RegExp(r'^\d{2}/\d{2}/\d{4}$')),
         findsNWidgets(3),
       );
       expect(find.textContaining('UTC'), findsNothing);
-      // O 50% entra com o lado da passagem no rótulo: são duas por mês sinódico.
-      expect(
-        find.textContaining(RegExp(r'^50% (crescente|minguante)$')),
-        findsOneWidget,
-      );
-      // Dois discos: o do mapa e o da fase, dentro do próprio overlay.
-      expect(find.byType(MoonDisc), findsNWidgets(2));
+      // Os rótulos em TEXTO das fases saíram: quem as identifica agora é o
+      // desenho do disco (o lado iluminado distingue crescente de minguante).
+      for (final label in [
+        'Próxima nova',
+        'Próxima cheia',
+        '50% crescente',
+        '50% minguante',
+      ]) {
+        expect(find.text(label), findsNothing, reason: 'rótulo "$label"');
+      }
+      // Cinco discos: o do mapa, o da fase no cabeçalho e os 3 ícones das linhas.
+      expect(find.byType(MoonDisc), findsNWidgets(5));
     });
 
-    testWidgets('as três próximas datas saem em ordem cronológica', (
-      tester,
-    ) async {
+    testWidgets('as três próximas fases saem em ordem cronológica, com o ícone '
+        'de cada fase', (tester) async {
       // 27/09/2026 é minguante: o próximo 50% (03/10) acontece ANTES da próxima
       // nova (10/10). É o caso que denuncia ordem de linha fixa no código (nova,
       // 50%, cheia) em vez de cronológica.
@@ -252,7 +258,7 @@ void main() {
 
       final rows = tester
           .widgetList<PanelInfoRow>(find.byType(PanelInfoRow))
-          .where((row) => RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(row.value))
+          .where((row) => row.leading != null)
           .toList();
       expect(rows.length, 3);
       final dates = rows.map((row) => _parseDate(row.value)).toList();
@@ -261,9 +267,57 @@ void main() {
         isTrue,
         reason: 'datas fora de ordem: ${rows.map((r) => r.value).join(", ")}',
       );
-      expect(rows[0].label, '50% minguante');
-      expect(rows[1].label, 'Próxima nova');
-      expect(rows[2].label, 'Próxima cheia');
+
+      // O ícone de cada linha é o desenho da fase do evento: 50% com o lado
+      // escuro à direita (minguante), disco apagado (nova) e disco cheio (cheia).
+      // Os dois primeiros discos da árvore são o do mapa e o do cabeçalho.
+      final discs = tester.widgetList<MoonDisc>(find.byType(MoonDisc)).toList();
+      final icons = discs.sublist(2);
+      expect(icons.length, 3);
+      expect(icons.map((d) => d.illumination).toList(), [0.5, 0.0, 1.0]);
+      expect(icons[0].litDirectionRad, closeTo(pi, 1e-9), reason: 'minguante');
+      // E o nome de cada evento continua no código, para leitor de tela.
+      expect(find.bySemanticsLabel('Próxima metade minguante'), findsOneWidget);
+      expect(find.bySemanticsLabel('Próxima lua nova'), findsOneWidget);
+      expect(find.bySemanticsLabel('Próxima lua cheia'), findsOneWidget);
+    });
+
+    testWidgets('o 50% crescente aponta a luz para o outro lado', (
+      tester,
+    ) async {
+      // Na metade crescente do mês o lado iluminado é o da direita (0 rad) —
+      // é o que distingue o quarto crescente do minguante no painel sem rótulo.
+      final waxing = MoonPosition.at(DateTime.utc(2026, 10, 4));
+      expect(waxing.nextHalfMoon.waxing, isTrue);
+      await pumpMarker(
+        tester,
+        MoonStatus(
+          subLatDeg: 0,
+          subLonDeg: 0,
+          illumination: 0.3,
+          elongationDeg: waxing.elongationDeg,
+          distanceKm: waxing.distanceKm,
+          ageDays: waxing.ageDays,
+          phase: waxing.phase,
+          sunSubLatDeg: 0,
+          sunSubLonDeg: 0,
+          nextFullMoon: waxing.nextFullMoon,
+          nextNewMoon: waxing.nextNewMoon,
+          lastNewMoon: waxing.lastNewMoon,
+          nextHalfMoon: waxing.nextHalfMoon,
+        ),
+      );
+      await mouseAt(tester, discRect(tester).center);
+
+      final icons = tester
+          .widgetList<MoonDisc>(find.byType(MoonDisc))
+          .toList()
+          .sublist(2);
+      // Ordem cronológica a partir de 04/10: nova (10/10), 50% crescente
+      // (18/10) e cheia (26/10).
+      expect(icons.map((d) => d.illumination).toList(), [0.0, 0.5, 1.0]);
+      expect(icons[1].litDirectionRad, 0, reason: 'crescente');
+      expect(find.bySemanticsLabel('Próxima metade crescente'), findsOneWidget);
     });
 
     testWidgets('o overlay fecha quando o ponteiro sai do disco', (
@@ -355,9 +409,10 @@ void main() {
       // Cartão dimensionado pelo conteúdo: nem com a fonte do flutter_test
       // (1 em por caractere, bem mais larga que a real) os rótulos e valores
       // cabem inteiros. Largura fixa aqui quebra este teste.
-      // São 11 textos: a linha do disco mais 5 linhas de rótulo/valor.
+      // São 8 textos: a linha do disco, as 2 linhas de rótulo/valor (Fase e
+      // Distância) e os 3 valores de data — as fases viraram ícone.
       final texts = find.byType(Text).evaluate().toList();
-      expect(texts.length, greaterThanOrEqualTo(11));
+      expect(texts.length, greaterThanOrEqualTo(8));
       for (final element in texts) {
         final paragraph = element.renderObject! as RenderParagraph;
         expect(
@@ -375,11 +430,11 @@ void main() {
       await mouseAt(tester, discRect(tester).center);
 
       final discs = tester.widgetList<MoonDisc>(find.byType(MoonDisc)).toList();
-      expect(discs.length, 2);
-      // O grande é o do mapa; o pequeno é o do overlay — e a iluminação é a
-      // mesma, então o desenho da fase é o mesmo nos dois.
+      expect(discs.length, 5);
+      // O primeiro é o do mapa; o segundo é o do cabeçalho do painel — e a
+      // iluminação é a mesma, então o desenho da fase é o mesmo nos dois.
       expect(discs.first.illumination, 0.25);
-      expect(discs.last.illumination, 0.25);
+      expect(discs[1].illumination, 0.25);
     });
   });
 }
