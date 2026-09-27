@@ -8,5 +8,13 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Sair para a internet: só a reserva por IP usa (a posição do sistema vem
+	     pelo CoreLocation, que não passa pela sandbox). -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Ler a posição do macOS (Wi-Fi). Sem esta permissão o CoreLocation
+	     simplesmente nega, sem diálogo. -->
+	<key>com.apple.security.personal-information.location</key>
+	<true/>
 </dict>
 </plist>

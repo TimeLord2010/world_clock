@@ -9,9 +9,10 @@ import 'panel_card.dart';
 ///
 /// Ocupa a tela inteira para poder desenhar a barreira que fecha o menu (um
 /// clique fora dele), mas só o ícone no canto e os painéis que abre recebem
-/// clique. Hoje a bandeja tem uma opção só — "Tema" — que abre o submenu com
-/// os temas disponíveis. Os dados da Lua NÃO moram aqui: eles aparecem no
-/// overlay que abre com o ponteiro em cima do marcador no mapa (`MoonMarker`).
+/// clique. A bandeja tem a opção "Tema" — que abre o submenu com os temas
+/// disponíveis — e, quando não há posição do usuário, uma LINHA DE MOTIVO (ver
+/// [locationNotice]). Os dados da Lua NÃO moram aqui: eles aparecem no overlay
+/// que abre com o ponteiro em cima do marcador no mapa (`MoonMarker`).
 ///
 /// **Só clique abre**: o menu não reage a hover. Hover aqui era um tiro no pé —
 /// cada movimento do ponteiro virava um `setState`, e como o mapa é irmão da
@@ -25,6 +26,7 @@ class SettingsMenu extends StatefulWidget {
     required this.theme,
     required this.onThemeSelected,
     this.themes = MapThemes.all,
+    this.locationNotice,
   });
 
   /// Tema em uso hoje: marca a opção selecionada e aparece no item "Tema".
@@ -35,6 +37,12 @@ class SettingsMenu extends StatefulWidget {
 
   /// Chamado quando o usuário escolhe um tema no submenu.
   final ValueChanged<MapTheme> onThemeSelected;
+
+  /// Por que não há ponto do usuário no mapa (`UserLocation.notice`). Nulo
+  /// quando há posição — e aí a bandeja não fala de localização, porque o ponto
+  /// no mapa já é a resposta. É uma linha de DADOS, não uma opção: sem clique,
+  /// sem cursor de mão.
+  final String? locationNotice;
 
   @override
   State<SettingsMenu> createState() => _SettingsMenuState();
@@ -140,8 +148,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  /// Menu de primeiro nível: a opção "Tema" (paletas). Os dados da Lua não
-  /// entram aqui — eles moram no overlay do marcador, no mapa.
+  /// Menu de primeiro nível: a opção "Tema" (paletas) e, quando a posição do
+  /// usuário não veio, a linha com o motivo. Os dados da Lua não entram aqui —
+  /// eles moram no overlay do marcador, no mapa.
   Widget _optionsPanel() {
     return PanelCard(
       background: widget.theme.background,
@@ -175,6 +184,27 @@ class _SettingsMenuState extends State<SettingsMenu> {
             ],
           ),
         ),
+        if (widget.locationNotice case final notice?)
+          Padding(
+            // Mesmo recuo horizontal dos itens, sem o vertical de linha
+            // clicável: é informação, não opção.
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.location_off_outlined,
+                  size: 16,
+                  color: PanelCard.dimTextColor,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  notice,
+                  style: TextStyle(fontSize: 13, color: PanelCard.dimTextColor),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

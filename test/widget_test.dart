@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:world_clock/main.dart';
+import 'package:world_clock/user_location.dart';
 import 'package:world_clock/world_dot_map.dart';
+
+/// Nos testes a posição do usuário é fixa: sem rede, sem permissão e sem
+/// espera — a tela é montada com uma resposta pronta.
+Future<UserLocation> noLocation() async =>
+    const UserLocation.failed(UserLocationFailure.unavailable);
 
 void main() {
   test('dot dataset loads with valid normalized coordinates', () async {
@@ -35,7 +41,7 @@ void main() {
 
   testWidgets('app renders the dot map without errors', (tester) async {
     await tester.runAsync(() async {
-      await tester.pumpWidget(const WorldClockApp());
+      await tester.pumpWidget(WorldClockApp(locationLookup: noLocation));
       // Give the async asset load time to complete, then rebuild.
       await Future<void>.delayed(const Duration(milliseconds: 100));
       await tester.pump();

@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'map_theme.dart';
 import 'moon_marker.dart';
 import 'moon_position.dart';
 import 'settings_menu.dart';
+import 'user_location.dart';
+import 'user_marker.dart';
 import 'world_dot_map.dart';
 
 void main() {
@@ -13,7 +16,15 @@ void main() {
 }
 
 class WorldClockApp extends StatelessWidget {
-  const WorldClockApp({super.key});
+  const WorldClockApp({
+    super.key,
+    this.locationLookup = UserLocationResolver.resolve,
+  });
+
+  /// Como a tela descobre a posição do usuário — repassado para
+  /// [WorldMapScreen.locationLookup]; os testes trocam por uma resposta fixa e
+  /// assim não dependem de rede nem de permissão.
+  final Future<UserLocation> Function() locationLookup;
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +39,20 @@ class WorldClockApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const WorldMapScreen(),
+      home: WorldMapScreen(locationLookup: locationLookup),
     );
   }
 }
 
 class WorldMapScreen extends StatefulWidget {
-  const WorldMapScreen({super.key});
+  const WorldMapScreen({
+    super.key,
+    this.locationLookup = UserLocationResolver.resolve,
+  });
+
+  /// Como descobrir a posição do usuário. Injetável para os testes rodarem sem
+  /// rede nem permissão (o padrão é a resolução de verdade).
+  final Future<UserLocation> Function() locationLookup;
 
   @override
   State<WorldMapScreen> createState() => _WorldMapScreenState();
@@ -52,9 +70,15 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// persistida entre execuções ainda).
   MapTheme _theme = MapThemes.standard;
 
+  /// Onde o usuário está, quando o sistema (ou o IP) responde. Nulo enquanto a
+  /// consulta não voltou — a tela abre sem o ponto e ele entra quando chega,
+  /// sem prender a abertura do app.
+  UserLocation? _location;
+
   @override
   void initState() {
     super.initState();
+    unawaited(_refreshLocation());
     // Keep the day/night boundary moving: refresh the reference instant
     // every 15 minutes (the sun moves ~3.75° of longitude in that window,
     // clearly visible on screen; per-minute updates are imperceptible).
@@ -67,7 +91,27 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
         // sozinho, sem repintar os pontos.
         _moon = MoonPosition.at(_now);
       });
+      // O Mac não sai do lugar, mas a RESPOSTA pode mudar: quem negou a
+      // permissão e depois autorizou só ganha o ponto porque este tique
+      // pergunta de novo. Uma consulta a cada 15 min é barata (a posição do
+      // sistema vem do cache do Wi-Fi, o IP é uma requisição curta).
+      unawaited(_refreshLocation());
     });
+  }
+
+  /// Pergunta a posição e publica o resultado. Falha não é silenciosa: o
+  /// motivo vai para a linha da bandeja (ver `SettingsMenu.locationNotice`) e
+  /// fica registrado no log — sem isso, "o ponto não apareceu" é indistinguível
+  /// de "a consulta quebrou".
+  Future<void> _refreshLocation() async {
+    final location = await widget.locationLookup();
+    if (kDebugMode) {
+      debugPrint('[localização] $location');
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _location = location);
   }
 
   @override
@@ -135,6 +179,19 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                               background: _theme.background,
                             ),
                           ),
+                          // O ponto do usuário fica DEPOIS do marcador da Lua no
+                          // Stack, ou seja, por cima: se os dois caírem no mesmo
+                          // lugar, quem não pode sumir é o "você está aqui".
+                          // Como o marcador da Lua, ele mora fora do
+                          // RepaintBoundary dos pontos.
+                          Positioned.fill(
+                            child: UserMarker(
+                              location: _location,
+                              mapSize: Size(mapWidth, mapWidth / 2),
+                              land: _theme.land,
+                              background: _theme.background,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -144,11 +201,14 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
             ),
             // O menu fica por cima do mapa: ele mesmo desenha a barreira de
             // "clicou fora, fechou". Os dados da Lua não estão aqui — aparecem
-            // no overlay do marcador, dentro do mapa.
+            // no overlay do marcador, dentro do mapa. A localização aparece
+            // SÓ quando não há posição: aí a linha diz o motivo (sem ela, um
+            // ponto que não surge seria uma falha silenciosa).
             Positioned.fill(
               child: SettingsMenu(
                 theme: _theme,
                 onThemeSelected: (theme) => setState(() => _theme = theme),
+                locationNotice: _location?.notice,
               ),
             ),
           ],

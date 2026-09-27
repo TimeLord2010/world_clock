@@ -10,7 +10,13 @@ import 'package:world_clock/map_theme.dart';
 import 'package:world_clock/moon_marker.dart';
 import 'package:world_clock/panel_card.dart';
 import 'package:world_clock/settings_menu.dart';
+import 'package:world_clock/user_location.dart';
 import 'package:world_clock/world_dot_map.dart';
+
+/// Posição fixa nos testes: nenhuma consulta de verdade — sem rede, sem
+/// permissão e sem espera. O ponto do usuário tem testes próprios.
+Future<UserLocation> noLocation() async =>
+    const UserLocation.failed(UserLocationFailure.unavailable);
 
 /// Cores do tema, e a bandeja de opções do canto superior direito: abre por
 /// clique, o item "Tema" abre o submenu, e escolher um tema troca a paleta do
@@ -284,7 +290,7 @@ void main() {
       tester,
     ) async {
       await tester.runAsync(() async {
-        await tester.pumpWidget(const WorldClockApp());
+        await tester.pumpWidget(WorldClockApp(locationLookup: noLocation));
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await tester.pump();
 
@@ -320,7 +326,7 @@ void main() {
       // falso e as dezenas de milhares de pontos não são redesenhadas. Este
       // teste é o contrato disso — se o hover voltar a sujar o mapa, quebra.
       await tester.runAsync(() async {
-        await tester.pumpWidget(const WorldClockApp());
+        await tester.pumpWidget(WorldClockApp(locationLookup: noLocation));
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await tester.pump();
 
