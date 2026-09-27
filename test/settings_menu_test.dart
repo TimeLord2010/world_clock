@@ -55,11 +55,14 @@ void main() {
   });
 
   group('bandeja de opções', () {
-    /// Monta só a bandeja, com um tema selecionável registrado.
+    /// Monta só a bandeja, com um tema selecionável registrado e, quando o
+    /// teste pede, a lista dos cliques na linha do crepúsculo ([twilight]).
     Future<List<MapTheme>> pumpMenu(
       WidgetTester tester, {
       MapTheme theme = MapThemes.standard,
       Size size = const Size(600, 400),
+      bool includeTwilight = true,
+      List<bool>? twilight,
     }) async {
       final picked = <MapTheme>[];
       await tester.binding.setSurfaceSize(size);
@@ -67,7 +70,12 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: SettingsMenu(theme: theme, onThemeSelected: picked.add),
+            body: SettingsMenu(
+              theme: theme,
+              onThemeSelected: picked.add,
+              includeTwilight: includeTwilight,
+              onTwilightChanged: (value) => twilight?.add(value),
+            ),
           ),
         ),
       );
@@ -101,7 +109,8 @@ void main() {
     testWidgets('mouse em cima do ícone NÃO abre o menu (só clique)', (
       tester,
     ) async {
-      await pumpMenu(tester);
+      final twilight = <bool>[];
+      await pumpMenu(tester, twilight: twilight);
 
       final mouse = await mouseAt(
         tester,
@@ -118,6 +127,12 @@ void main() {
       await mouse.moveTo(tester.getCenter(find.text('Tema')));
       await tester.pumpAndSettle();
       expect(find.text('Padrão'), findsNothing); // submenu não abriu sozinho
+
+      // A linha do crepúsculo também não reage a hover: passar o mouse por
+      // cima dela não alterna nada — a caixinha só muda por clique.
+      await mouse.moveTo(tester.getCenter(find.text('Incluir crepúsculo')));
+      await tester.pumpAndSettle();
+      expect(twilight, isEmpty);
 
       await mouse.moveTo(const Offset(300, 300));
       await tester.pumpAndSettle();
@@ -179,7 +194,12 @@ void main() {
       // até a fonte do flutter_test (1 em por caractere, bem mais larga que a
       // fonte real) cabe inteira. Se alguém voltar a fixar a largura do painel,
       // é aqui que quebra.
-      for (final label in ['Tema', 'Padrão', 'Monocromático branco']) {
+      for (final label in [
+        'Tema',
+        'Incluir crepúsculo',
+        'Padrão',
+        'Monocromático branco',
+      ]) {
         final para = tester.renderObject<RenderParagraph>(find.text(label));
         expect(
           para.didExceedMaxLines,
@@ -187,6 +207,33 @@ void main() {
           reason: '"$label" não caberia na largura do painel',
         );
       }
+    });
+
+    testWidgets('a linha "Incluir crepúsculo" mostra o estado atual na '
+        'caixinha, e clicar avisa a tela com o valor invertido', (tester) async {
+      final twilight = <bool>[];
+      await pumpMenu(tester, includeTwilight: true, twilight: twilight);
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      expect(find.text('Incluir crepúsculo'), findsOneWidget);
+      expect(find.byIcon(Icons.check_box), findsOneWidget);
+      expect(find.byIcon(Icons.check_box_outline_blank), findsNothing);
+
+      await tester.tap(find.text('Incluir crepúsculo'));
+      await tester.pumpAndSettle();
+      expect(twilight, [false]);
+      // O menu continua aberto: dá para alternar e ver o mapa atrás mudar.
+      expect(find.text('Incluir crepúsculo'), findsOneWidget);
+    });
+
+    testWidgets('desligado, a caixinha aparece vazia', (tester) async {
+      await pumpMenu(tester, includeTwilight: false);
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.check_box_outline_blank), findsOneWidget);
+      expect(find.byIcon(Icons.check_box), findsNothing);
     });
 
     testWidgets('escolher um tema avisa a tela e fecha o menu', (tester) async {
@@ -360,6 +407,40 @@ void main() {
           isFalse,
           reason: 'o rebuild do hover não pode sujar os pontos do mapa',
         );
+
+        await tester.pumpWidget(const SizedBox());
+      });
+    });
+
+    testWidgets('o item "Incluir crepúsculo" troca a fórmula do mapa', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await tester.pumpWidget(WorldClockApp(locationLookup: noLocation));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+
+        WorldDotMap map() =>
+            tester.widget<WorldDotMap>(find.byType(WorldDotMap));
+
+        expect(
+          map().includeTwilight,
+          isTrue,
+          reason: 'a espera pelo crepúsculo vem ligada por padrão',
+        );
+
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Incluir crepúsculo'));
+        await tester.pumpAndSettle();
+
+        expect(map().includeTwilight, isFalse);
+        expect(find.byIcon(Icons.check_box_outline_blank), findsOneWidget);
+
+        // E volta: o estado anda nos dois sentidos.
+        await tester.tap(find.text('Incluir crepúsculo'));
+        await tester.pumpAndSettle();
+        expect(map().includeTwilight, isTrue);
 
         await tester.pumpWidget(const SizedBox());
       });

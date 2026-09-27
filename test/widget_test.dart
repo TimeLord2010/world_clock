@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:world_clock/main.dart';
 import 'package:world_clock/user_location.dart';
@@ -109,5 +112,97 @@ void main() {
 
     expect(find.byType(WorldDotMap), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('o crepúsculo muda os PIXELS no fim da tarde (e o mapa repinta '
+      'na hora da virada)', (tester) async {
+    // 18:30 local em 27/09/2026: fim da tarde, com um lado do mundo na virada.
+    // O MESMO `now` nos dois lados — quem muda é a opção; se o pintor esquecer
+    // de comparar a opção no `shouldRepaint`, os dois renders saem iguais e é
+    // aqui que quebra.
+    await tester.runAsync(() async {
+      final now = DateTime.utc(2026, 9, 27, 21, 30);
+
+      tester.view.physicalSize = const Size(800, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      const key = ValueKey('mapa');
+      Widget harness({required bool includeTwilight}) => MaterialApp(
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: key,
+            child: SizedBox(
+              width: 720,
+              height: 360,
+              child: WorldDotMap(now: now, includeTwilight: includeTwilight),
+            ),
+          ),
+        ),
+      );
+
+      /// Maior vermelho numa janela 5×5 em volta do ponto (lon, lat). Janela e
+      /// não média: o ponto tem 2 px num fundo quase preto, e a média dilui a
+      /// diferença; o miolo do ponto é o pixel mais claro da janela.
+      Future<int> brightestRed(String label, double lon, double lat) async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(key),
+        );
+        expect(boundary.size, const Size(720, 360), reason: label);
+        final image = await boundary.toImage();
+        final bytes = (await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        final p = WorldDotMap.normalize(lon, lat);
+        final cx = (p.dx * image.width).round();
+        final cy = (p.dy * image.height).round();
+        var best = 0;
+        for (var y = cy - 2; y <= cy + 2; y++) {
+          for (var x = cx - 2; x <= cx + 2; x++) {
+            final red = bytes.getUint8((y * image.width + x) * 4);
+            if (red > best) {
+              best = red;
+            }
+          }
+        }
+        return best;
+      }
+
+      await tester.pumpWidget(harness(includeTwilight: false));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+      final duskSem = await brightestRed('sem crepúsculo', -50.5, -9.5);
+
+      await tester.pumpWidget(harness(includeTwilight: true));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await tester.pump();
+      final duskCom = await brightestRed('com crepúsculo', -50.5, -9.5);
+
+      // Célula de TERRA na faixa do fim da tarde (interior do Pará; o ponto
+      // sobre Florianópolis cai no mar na grade de 1°, e o oceano tem metade
+      // do contraste do laranja). Medido neste render: canal R 72 → 104.
+      expect(
+        duskCom,
+        greaterThan(duskSem + 12),
+        reason: 'o ponto de terra no fim da tarde tem de estar visivelmente '
+            'mais claro com o crepúsculo ligado',
+      );
+
+      // O contraste entre as duas versões some onde o sol está a pino: a
+      // mudança é só na virada, não no mapa inteiro.
+      final solSem = await brightestRed(
+        'sem crepúsculo no subsolar',
+        -142.5,
+        -3.5,
+      );
+      final solCom = await brightestRed(
+        'com crepúsculo no subsolar',
+        -142.5,
+        -3.5,
+      );
+      expect((solCom - solSem).abs(), lessThanOrEqualTo(2));
+
+      await tester.pumpWidget(const SizedBox());
+    });
   });
 }

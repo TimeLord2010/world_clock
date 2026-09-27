@@ -10,7 +10,9 @@ import 'panel_card.dart';
 /// Ocupa a tela inteira para poder desenhar a barreira que fecha o menu (um
 /// clique fora dele), mas só o ícone no canto e os painéis que abre recebem
 /// clique. A bandeja tem a opção "Tema" — que abre o submenu com os temas
-/// disponíveis — e, quando não há posição do usuário, uma LINHA DE MOTIVO (ver
+/// disponíveis — a opção "Incluir crepúsculo" (uma caixinha que liga/desliga a
+/// espera pelo crepúsculo no mapa, ver [WorldDotMap.includeTwilight]) e,
+/// quando não há posição do usuário, uma LINHA DE MOTIVO (ver
 /// [locationNotice]). Os dados da Lua NÃO moram aqui: eles aparecem no overlay
 /// que abre com o ponteiro em cima do marcador no mapa (`MoonMarker`).
 ///
@@ -25,6 +27,8 @@ class SettingsMenu extends StatefulWidget {
     super.key,
     required this.theme,
     required this.onThemeSelected,
+    required this.includeTwilight,
+    required this.onTwilightChanged,
     this.themes = MapThemes.all,
     this.locationNotice,
   });
@@ -37,6 +41,15 @@ class SettingsMenu extends StatefulWidget {
 
   /// Chamado quando o usuário escolhe um tema no submenu.
   final ValueChanged<MapTheme> onThemeSelected;
+
+  /// Estado da opção "Incluir crepúsculo": com ela ligada, a noite do mapa
+  /// só chega no fim do crepúsculo civil (ver [WorldDotMap.includeTwilight]).
+  /// O estado mora na tela ([WorldMapScreen]) — a bandeja só mostra a
+  /// caixinha e avisa o clique.
+  final bool includeTwilight;
+
+  /// Chamado com o NOVO valor quando o usuário clica na linha do crepúsculo.
+  final ValueChanged<bool> onTwilightChanged;
 
   /// Por que não há ponto do usuário no mapa (`UserLocation.notice`). Nulo
   /// quando há posição — e aí a bandeja não fala de localização, porque o ponto
@@ -148,9 +161,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  /// Menu de primeiro nível: a opção "Tema" (paletas) e, quando a posição do
-  /// usuário não veio, a linha com o motivo. Os dados da Lua não entram aqui —
-  /// eles moram no overlay do marcador, no mapa.
+  /// Menu de primeiro nível: a opção "Tema" (paletas), a caixinha "Incluir
+  /// crepúsculo" e, quando a posição do usuário não veio, a linha com o
+  /// motivo. Os dados da Lua não entram aqui — eles moram no overlay do
+  /// marcador, no mapa.
   Widget _optionsPanel() {
     return PanelCard(
       background: widget.theme.background,
@@ -180,6 +194,39 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 Icons.chevron_right,
                 size: 16,
                 color: PanelCard.dimTextColor,
+              ),
+            ],
+          ),
+        ),
+        _row(
+          onTap: () => widget.onTwilightChanged(!widget.includeTwilight),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.wb_twilight, size: 16, color: PanelCard.textColor),
+              const SizedBox(width: 10),
+              Text(
+                'Incluir crepúsculo',
+                style: TextStyle(fontSize: 13, color: PanelCard.textColor),
+              ),
+              const SizedBox(width: 24),
+              // Caixinha do estado: cheia = ligado. A coluna da direita tem a
+              // MESMA largura do rabo da linha "Tema" (swatch + seta), para os
+              // controles das duas linhas ficarem alinhados.
+              SizedBox(
+                width: 36,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Icon(
+                    widget.includeTwilight
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                    size: 16,
+                    color: widget.includeTwilight
+                        ? PanelCard.textColor
+                        : PanelCard.dimTextColor,
+                  ),
+                ),
               ),
             ],
           ),

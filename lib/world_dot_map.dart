@@ -34,6 +34,7 @@ class WorldDotMap extends StatefulWidget {
     this.dotColor = defaultDotColor,
     this.oceanColor = defaultOceanColor,
     this.now,
+    this.includeTwilight = false,
   });
 
   /// Background behind the map.
@@ -53,6 +54,12 @@ class WorldDotMap extends StatefulWidget {
   /// Reference instant for the solar shading. When null, [DateTime.now] is
   /// used each time the painter repaints.
   final DateTime? now;
+
+  /// Whether the shading waits for the twilight: with it, a dot only reaches
+  /// full darkness once the sun is 6° BELOW the horizon (civil twilight), so
+  /// the map stops reading "night" while the sky is still lit. Off (default)
+  /// keeps the original ramp — night starts at the horizon.
+  final bool includeTwilight;
 
   /// Default daylight color of the ocean: a neutral gray — dark enough that
   /// the sea texture never competes with the orange continents (the previous
@@ -246,6 +253,7 @@ class _WorldDotMapState extends State<WorldDotMap> {
               backgroundColor: widget.backgroundColor,
               devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
               now: widget.now,
+              includeTwilight: widget.includeTwilight,
             ),
             size: Size.infinite,
           );
@@ -285,6 +293,7 @@ class _DotLayer {
   int? _cachedStride;
   List<double>? _brightness;
   int? _brightnessMinute;
+  bool? _brightnessTwilight;
 
   /// Snaps every dot center to the nearest physical pixel so dots are crisp
   /// and aligned to the invisible grid on any display; also caches which
@@ -316,18 +325,29 @@ class _DotLayer {
   /// Per-dot brightness for [now], cached until the minute ticks over (the
   /// sun barely moves within a minute, and the trig loop over ~15k land +
   /// ~50k ocean dots only runs once per minute instead of once per frame).
-  List<double> brightnessFor(DateTime? now) {
+  ///
+  /// The cache key also carries [includeTwilight]: flipping the menu option
+  /// must never serve the other formula's numbers for the rest of the minute.
+  List<double> brightnessFor(DateTime? now, bool includeTwilight) {
     final minute = minuteKey(now);
-    if (_brightness != null && _brightnessMinute == minute) {
+    if (_brightness != null &&
+        _brightnessMinute == minute &&
+        _brightnessTwilight == includeTwilight) {
       return _brightness!;
     }
     final moment = (now ?? DateTime.now()).toUtc();
     final out = List<double>.filled(geo.length, 0);
     for (var i = 0; i < geo.length; i++) {
-      out[i] = SunShading.intensity(geo[i].dy, geo[i].dx, moment);
+      out[i] = SunShading.intensity(
+        geo[i].dy,
+        geo[i].dx,
+        moment,
+        includeTwilight: includeTwilight,
+      );
     }
     _brightness = out;
     _brightnessMinute = minute;
+    _brightnessTwilight = includeTwilight;
     return out;
   }
 
@@ -343,6 +363,7 @@ class _DotPainter extends CustomPainter {
     required this.backgroundColor,
     required this.devicePixelRatio,
     this.now,
+    this.includeTwilight = false,
   }) {
     _land = _DotLayer(
       normalized: data.land,
@@ -369,6 +390,10 @@ class _DotPainter extends CustomPainter {
   final double devicePixelRatio;
 
   final DateTime? now;
+
+  /// Whether to shade with the twilight ramp
+  /// (see [WorldDotMap.includeTwilight]).
+  final bool includeTwilight;
 
   /// Brightness quantization: dots with similar brightness share one
   /// drawPoints call (a handful of draw ops, never one per dot).
@@ -419,7 +444,7 @@ class _DotPainter extends CustomPainter {
     if (layer.normalized.isEmpty) {
       return;
     }
-    final brightness = layer.brightnessFor(now);
+    final brightness = layer.brightnessFor(now, includeTwilight);
     final screen = layer.screenOffsets;
 
     final buckets = List.generate(_buckets, (_) => <Offset>[]);
@@ -450,6 +475,7 @@ class _DotPainter extends CustomPainter {
         oldDelegate.backgroundColor != backgroundColor ||
         oldDelegate.devicePixelRatio != devicePixelRatio ||
         oldDelegate.data != data ||
+        oldDelegate.includeTwilight != includeTwilight ||
         _DotLayer.minuteKey(oldDelegate.now) != _DotLayer.minuteKey(now);
   }
 }

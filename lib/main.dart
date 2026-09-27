@@ -70,6 +70,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// persistida entre execuções ainda).
   MapTheme _theme = MapThemes.standard;
 
+  /// Espera pelo crepúsculo: LIGADA por padrão — foi a opção escolhida (a
+  /// noite do mapa só chega quando o céu de fato apaga, ~25 min depois do pôr
+  /// do sol). O item "Incluir crepúsculo" do menu desliga e o mapa volta ao
+  /// desenho anterior (noite no instante em que o sol cruza o horizonte).
+  bool _includeTwilight = true;
+
   /// Onde o usuário está, quando o sistema (ou o IP) responde. Nulo enquanto a
   /// consulta não voltou — a tela abre sem o ponto e ele entra quando chega,
   /// sem prender a abertura do app.
@@ -166,6 +172,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                                 backgroundColor: _theme.background,
                                 dotColor: _theme.land,
                                 oceanColor: _theme.ocean,
+                                includeTwilight: _includeTwilight,
                               ),
                             ),
                           ),
@@ -208,6 +215,9 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
               child: SettingsMenu(
                 theme: _theme,
                 onThemeSelected: (theme) => setState(() => _theme = theme),
+                includeTwilight: _includeTwilight,
+                onTwilightChanged: (value) =>
+                    setState(() => _includeTwilight = value),
                 locationNotice: _location?.notice,
               ),
             ),

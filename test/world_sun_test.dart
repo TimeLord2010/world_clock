@@ -46,4 +46,51 @@ void main() {
       );
     });
   });
+
+  group('SunShading with the twilight option', () {
+    // Anchors measured for Florianópolis on 2026-09-27 by running the repo's
+    // own formula (see the scratch probe): at 18:30 local the sky outside
+    // still has light, 18:19:22 is the moment the ORIGINAL ramp reaches zero
+    // (sun at the horizon) and 18:46:32 is the end of civil twilight (sun
+    // 6° below the horizon).
+    const lat = -27.5967;
+    const lon = -48.5492;
+
+    test('the default ramp is untouched: night starts at the horizon', () {
+      final dusk = DateTime.utc(2026, 9, 27, 21, 30); // 18:30 local
+      expect(SunShading.intensity(lat, lon, dusk), 0.0);
+    });
+
+    test('with the twilight, 18:30 (11 min into dusk) still has light', () {
+      // Sun altitude at that instant: −2,354° → (−2,354 + 6) / 18 = 0,2026.
+      final dusk = DateTime.utc(2026, 9, 27, 21, 30);
+      expect(
+        SunShading.intensity(lat, lon, dusk, includeTwilight: true),
+        closeTo(0.2026, 0.003),
+      );
+    });
+
+    test('the horizon crossing turns full dark into one third of light', () {
+      final horizon = DateTime.utc(2026, 9, 27, 21, 19, 22); // 18:19:22 local
+      expect(SunShading.intensity(lat, lon, horizon), 0.0);
+      expect(
+        SunShading.intensity(lat, lon, horizon, includeTwilight: true),
+        closeTo(1 / 3, 0.003),
+      );
+    });
+
+    test('full dark only at the end of the civil twilight', () {
+      final civilEnd = DateTime.utc(2026, 9, 27, 21, 46, 32); // 18:46:32 local
+      expect(
+        SunShading.intensity(lat, lon, civilEnd, includeTwilight: true),
+        closeTo(0.0, 0.001),
+      );
+    });
+
+    test('full daylight is full daylight in both ramps', () {
+      final noon = DateTime.utc(2026, 9, 27, 15); // 12:00 local
+      expect(SunShading.intensity(lat, lon, noon), 1.0);
+      expect(SunShading.intensity(lat, lon, noon, includeTwilight: true), 1.0);
+    });
+  });
 }
