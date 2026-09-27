@@ -30,8 +30,8 @@ import 'world_sun.dart';
 class WorldDotMap extends StatefulWidget {
   const WorldDotMap({
     super.key,
-    this.backgroundColor = const Color(0xFF111111),
-    this.dotColor = const Color(0xFFFF9800),
+    this.backgroundColor = defaultBackgroundColor,
+    this.dotColor = defaultDotColor,
     this.oceanColor = defaultOceanColor,
     this.now,
   });
@@ -59,6 +59,14 @@ class WorldDotMap extends StatefulWidget {
   /// #6E6E6E read as too light, especially on the desktop widget, where the
   /// generic-RGB → sRGB re-encode lit it up to ~129).
   static const Color defaultOceanColor = Color(0xFF5A5A5A);
+
+  /// Default background behind the map: the app's near-black. Named so the
+  /// palettes in `map_theme.dart` can point at it instead of repeating the
+  /// literal (a theme and this default drifting apart was silent before).
+  static const Color defaultBackgroundColor = Color(0xFF111111);
+
+  /// Default daylight color of the land dots: the app's orange.
+  static const Color defaultDotColor = Color(0xFFFF9800);
 
   /// Columns of the source grid (1° of longitude per cell).
   static const int gridColumns = 360;
