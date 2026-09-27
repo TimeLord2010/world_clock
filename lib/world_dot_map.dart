@@ -67,7 +67,8 @@ class WorldDotMap extends StatefulWidget {
   static const int gridRows = 180;
 
   /// Center of grid cell ([col], [row]) in degrees.
-  static Offset cellCenter(int col, int row) => Offset(-179.5 + col, 89.5 - row);
+  static Offset cellCenter(int col, int row) =>
+      Offset(-179.5 + col, 89.5 - row);
 
   /// Index of the grid cell that CONTAINS ([lonDeg], [latDeg]).
   ///
@@ -122,7 +123,12 @@ class WorldDotMap extends StatefulWidget {
     }
     final col = (normalized.dx * gridColumns).floor();
     final row = (normalized.dy * gridRows).floor();
-    return col % stride == 0 && row % stride == 0;
+    // Centred lattice (`offset = stride ~/ 2`), not anchored on cell 0:
+    // anchoring on 0 left the last column 3.5° from the right border while the
+    // first sat 0.5° from the left one, so the right edge read as if a column
+    // of dots were missing.
+    final offset = stride ~/ 2;
+    return (col - offset) % stride == 0 && (row - offset) % stride == 0;
   }
 
   static final Future<WorldDotData> _dataFuture = _parseData();
@@ -318,10 +324,12 @@ class _DotPainter extends CustomPainter {
   /// #111111 background; 0.30 keeps a clear "night" look while readable.
   static const double _minBrightness = 0.30;
 
-  /// Ocean minimum brightness: dimmer than the land, so the continents stay
-  /// the brightest thing on the night side and the water still reads as
-  /// water instead of turning into a second grid of bright dots.
-  static const double _oceanMinBrightness = 0.15;
+  /// Ocean minimum brightness: same floor as the land (0.30) — the sea and the
+  /// continents now fade to the same minimum. At 0.15 the water dots sat only
+  /// ~11 levels above the background, so the polar-night rows at the top border
+  /// faded out of view and the map looked cropped at the edge; the continents
+  /// still stand out at night by colour, not by this floor.
+  static const double _oceanMinBrightness = 0.30;
 
   late final _DotLayer _land;
   late final _DotLayer _ocean;

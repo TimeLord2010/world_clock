@@ -24,9 +24,12 @@ struct WorldDotMapRenderer {
     // night side readable against #111111 (0.10 was too dark).
     static let minBrightness = 0.30
     let oceanColor: (r: Double, g: Double, b: Double) = (90 / 255, 90 / 255, 90 / 255) // #5A5A5A
-    /// Ocean night floor — dimmer than the land, so the continents stay the
-    /// brightest thing on the night side.
-    static let oceanMinBrightness = 0.15
+    /// Ocean night floor — same 0.30 as the land. At 0.15 the sea dots dipped
+    /// to ~11 levels above the #111111 panel, so the polar-night rows near the
+    /// top border faded out of view entirely and the field looked cropped;
+    /// the continents still read as the brightest thing at night because of
+    /// their colour, not because of this floor.
+    static let oceanMinBrightness = 0.30
 
     /// Grid of the projection: 1° cells, 360 columns × 180 rows.
     static let gridColumns = 360
@@ -94,11 +97,17 @@ struct WorldDotMapRenderer {
 
     /// Whether the dot survives decimation — same as `WorldDotMap.keepDot`
     /// (containing cell via floor; dataset sits at cell centers .5).
+    ///
+    /// The lattice is CENTERED on the grid (`offset = stride / 2`), not
+    /// anchored on cell 0. With `col % stride == 0` the first column sat 0.5°
+    /// from the left border while the last one sat 3.5° from the right, so the
+    /// right edge read as if a whole column of dots were missing.
     func keepDot(lon: Double, lat: Double, stride: Int) -> Bool {
         if stride == 1 { return true }
         let col = Int(floor(lon + 180))
         let row = Int(floor(90 - lat))
-        return col % stride == 0 && row % stride == 0
+        let offset = stride / 2
+        return (col - offset) % stride == 0 && (row - offset) % stride == 0
     }
 
     /// Renders the map for instant [now] into physical pixels
