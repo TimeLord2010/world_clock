@@ -103,66 +103,76 @@ void main() {
     // cruzamento interpolado) — NÃO o "quarto" dos almanaques, que é a elongação
     // em 90°/270° e cai ~20 min depois do 50% exato (o Sol não está no infinito:
     // no meio vale `cos elong = R/dist` → 89,85°).
-    final crosses = <(String, DateTime, DateTime, bool, MoonPhase)>[
-      // rótulo, instante de partida, referência do JPL, crescente?, fase
-      (
-        'minguante',
-        DateTime.utc(2026, 9, 27, 19),
-        DateTime.utc(2026, 10, 3, 13, 40, 35),
-        false,
-        MoonPhase.lastQuarter,
-      ),
-      (
-        'crescente',
-        DateTime.utc(2026, 10, 4),
-        DateTime.utc(2026, 10, 18, 15, 52, 12),
-        true,
-        MoonPhase.firstQuarter,
-      ),
+    //
+    // Partindo de 27/09/2026 as DUAS passagens seguintes são justamente as duas
+    // referências: a minguante de 03/10 e a crescente de 18/10.
+    final from = DateTime.utc(2026, 9, 27, 19);
+    final reference = <(bool, DateTime, MoonPhase)>[
+      // crescente?, instante do JPL, fase no instante
+      (false, DateTime.utc(2026, 10, 3, 13, 40, 35), MoonPhase.lastQuarter),
+      (true, DateTime.utc(2026, 10, 18, 15, 52, 12), MoonPhase.firstQuarter),
     ];
 
     test('as duas passagens batem com o JPL (tol. 15 min)', () {
-      for (final (label, from, reference, waxing, phase) in crosses) {
-        final half = MoonPosition.at(from).nextHalfMoon;
-        expect(half.waxing, waxing, reason: 'lado da passagem $label');
+      final halves = MoonPosition.at(from).nextHalfMoons;
+      expect(halves.length, 2, reason: 'uma passagem de cada lado');
+
+      for (var i = 0; i < halves.length; i++) {
+        final (waxing, jpl, phase) = reference[i];
+        expect(halves[i].waxing, waxing, reason: 'lado da passagem $i');
         expect(
-          half.when.difference(reference).inMinutes.abs(),
+          halves[i].when.difference(jpl).inMinutes.abs(),
           lessThan(15),
-          reason: '50% $label em ${half.when}',
+          reason: 'passagem $i em ${halves[i].when}',
         );
         // A fase no instante da passagem é o quarto correspondente.
-        expect(MoonPosition.at(half.when).phase, phase, reason: label);
-      }
-    });
-
-    test('no instante devolvido a iluminação é 50%', () {
-      // A busca é pela iluminação de verdade, então o ponto de chegada tem de
-      // dar 1/2 — é o que separa esta busca da elongação em 90°.
-      for (final (label, from, _, _, _) in crosses) {
-        final half = MoonPosition.at(from).nextHalfMoon;
+        expect(MoonPosition.at(halves[i].when).phase, phase, reason: '$i');
+        // E a iluminação ali é 50% de verdade: a busca é pela iluminação, não
+        // pela elongação em 90° — é isso que separa uma da outra.
         expect(
-          MoonPosition.at(half.when).illumination,
+          MoonPosition.at(halves[i].when).illumination,
           closeTo(0.5, 1e-6),
-          reason: label,
+          reason: 'passagem $i',
         );
       }
     });
 
-    test('a passagem vem sempre depois do instante de partida', () {
+    test('as duas saem em ordem e ficam a ~14,8 dias uma da outra', () {
+      final halves = MoonPosition.at(from).nextHalfMoons;
+      expect(halves.first.when.isBefore(halves.last.when), isTrue);
+      final gap = halves.last.when.difference(halves.first.when).inHours / 24;
+      expect(gap, inInclusiveRange(14.0, 15.5), reason: 'vão de $gap dias');
+      // Lados opostos: uma minguante, outra crescente.
+      expect(halves.first.waxing, isNot(halves.last.waxing));
+    });
+
+    test('a primeira passagem vem sempre depois do instante de partida', () {
       for (final hour in [0, 3, 6, 9, 12, 15, 18, 21]) {
-        final from = DateTime.utc(2026, 10, 1).add(Duration(hours: hour));
-        final half = MoonPosition.at(from).nextHalfMoon;
-        expect(half.when.isAfter(from), isTrue, reason: 'partindo de $from');
+        final start = DateTime.utc(2026, 10, 1).add(Duration(hours: hour));
+        final halves = MoonPosition.at(start).nextHalfMoons;
+        expect(
+          halves.first.when.isAfter(start),
+          isTrue,
+          reason: 'partindo de $start',
+        );
         // E nunca longe demais: as passagens ficam a ~14,8 dias uma da outra.
-        expect(half.when.difference(from).inDays, lessThan(15));
+        expect(halves.first.when.difference(start).inDays, lessThan(15));
       }
     });
 
-    test('no meio do mês sinódico a próxima passagem é a do outro lado', () {
-      // 27/09 → 50% minguante (03/10); 04/10 → 50% crescente (18/10). O lado
-      // não é "sempre minguante": é o lado da próxima passagem, seja qual for.
-      expect(MoonPosition.at(crosses[0].$2).nextHalfMoon.waxing, isFalse);
-      expect(MoonPosition.at(crosses[1].$2).nextHalfMoon.waxing, isTrue);
+    test('o lado da próxima passagem troca no meio do mês sinódico', () {
+      // 27/09 → 50% minguante (03/10); 04/10 → 50% crescente (18/10). O lado não
+      // é "sempre minguante": é o lado da próxima passagem, seja qual for.
+      expect(
+        MoonPosition.at(
+          DateTime.utc(2026, 9, 27, 19),
+        ).nextHalfMoons.first.waxing,
+        isFalse,
+      );
+      expect(
+        MoonPosition.at(DateTime.utc(2026, 10, 4)).nextHalfMoons.first.waxing,
+        isTrue,
+      );
     });
   });
 

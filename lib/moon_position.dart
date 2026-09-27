@@ -58,7 +58,7 @@ class MoonStatus {
     required this.nextFullMoon,
     required this.nextNewMoon,
     required this.lastNewMoon,
-    required this.nextHalfMoon,
+    required this.nextHalfMoons,
   });
 
   /// Latitude do ponto onde a Lua está a pino, em graus (+N).
@@ -99,12 +99,14 @@ class MoonStatus {
   /// Última lua nova (UTC) — a idade sinódica conta a partir dela.
   final DateTime lastNewMoon;
 
-  /// Próximo instante de **50% de iluminação** (UTC) e por qual lado a Lua
-  /// passa por ele: `waxing` = crescente (quarto crescente); senão minguante.
+  /// As DUAS próximas passagens por **50% de iluminação** (UTC), em ordem
+  /// cronológica, cada uma com o lado por onde a Lua passa: `waxing` =
+  /// crescente (quarto crescente); senão minguante.
   ///
-  /// São DUAS passagens de 50% por mês sinódico — uma entre a nova e a cheia,
-  /// outra entre a cheia e a nova — e esta é a próxima, seja qual for.
-  final ({DateTime when, bool waxing}) nextHalfMoon;
+  /// São duas por mês sinódico — uma entre a nova e a cheia, outra entre a
+  /// cheia e a nova —, sempre a ~14,8 dias uma da outra; o painel mostra as
+  /// duas para não sobrar um vão de duas semanas entre a nova e a cheia.
+  final List<({DateTime when, bool waxing})> nextHalfMoons;
 
   /// Fração iluminada como porcentagem, para a interface.
   double get illuminationPercent => illumination * 100;
@@ -139,7 +141,13 @@ abstract final class MoonPosition {
     final nextFull = _crossing(180, utc, forward: true);
     final nextNew = _crossing(0, utc, forward: true);
     final lastNew = _crossing(0, utc, forward: false);
-    final nextHalf = _halfMoon(utc);
+    // A SEGUNDA passagem de 50% sai da busca reiniciada um minuto depois da
+    // primeira: no instante exato do cruzamento o desvio é ~0 e a busca precisa
+    // de um ponto já do outro lado para achar a troca de sinal seguinte.
+    final firstHalf = _halfMoon(utc);
+    final secondHalf = _halfMoon(
+      firstHalf.when.add(const Duration(minutes: 1)),
+    );
 
     return MoonStatus(
       subLatDeg: dec / _deg,
@@ -154,7 +162,7 @@ abstract final class MoonPosition {
       nextFullMoon: nextFull,
       nextNewMoon: nextNew,
       lastNewMoon: lastNew,
-      nextHalfMoon: nextHalf,
+      nextHalfMoons: [firstHalf, secondHalf],
     );
   }
 

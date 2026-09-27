@@ -130,13 +130,13 @@ String formatThousands(int value) {
   return out.toString();
 }
 
-/// Data curta do calendário local: `18/10/2026`.
+/// Dia e mês do calendário local, curto: `18/10`.
 ///
 /// Data **local** e não UTC: sem a hora, um carimbo UTC cairia no dia anterior
 /// quando a sizígia acontece de madrugada em UTC (00:00–03:00 UTC é 21:00–24:00
 /// em Brasília) — o dia que o usuário vê no calendário dele é o local.
-String formatDate(DateTime when) {
+String formatDayMonth(DateTime when) {
   final local = when.toLocal();
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${two(local.day)}/${two(local.month)}/${local.year}';
+  return '${two(local.day)}/${two(local.month)}';
 }

@@ -172,60 +172,39 @@ class _MoonMarkerState extends State<MoonMarker> {
               label: 'Distância',
               value: '${formatThousands(status.distanceKm.round())} km',
             ),
-            // As três próximas fases saem em ordem CRONOLÓGICA, com o DESENHO da
-            // fase no lugar do rótulo e só a data: são "o que vem depois", e a
-            // ordem fixa do ciclo faria uma linha ter data anterior à de cima na
-            // metade minguante do mês (o 50% minguante acontece antes da próxima
-            // nova). Quem distingue o 50% crescente do minguante é o LADO
-            // iluminado do disco, na mesma convenção do disco do mapa. A hora
-            // ("04:13 UTC") não muda nada para quem olha o painel.
-            for (final event in _upcoming(status))
-              PanelInfoRow(
-                leading: Semantics(
-                  label: _eventLabel(event),
-                  child: MoonDisc(
-                    illumination: event.illumination,
-                    diameter: 14,
-                    litDirectionRad: event.litDirectionRad,
-                  ),
-                ),
-                value: formatDate(event.at),
-                dimValue: true,
-              ),
+            // As próximas fases vão numa ÚNICA linha, cada uma com o desenho da
+            // fase em cima e a data embaixo (dia e mês): lado a lado elas se
+            // comparam de relance, e as duas passagens de 50% aparecem juntas —
+            // uma entre a nova e a cheia, outra entre a cheia e a nova.
+            _UpcomingStrip(events: _upcoming(status)),
           ],
         ),
       ),
     );
   }
 
-  /// As três próximas fases — nova, 50% e cheia — em ordem cronológica.
+  /// As QUATRO próximas fases — nova, as duas de 50% e cheia — em ordem
+  /// cronológica.
   ///
-  /// O 50% aparece DUAS vezes por mês sinódico (crescente, entre a nova e a
-  /// cheia; minguante, entre a cheia e a nova), então o lado iluminado faz
-  /// parte do desenho do evento.
+  /// As quatro juntas são sempre as próximas quatro fases do ciclo: a próxima
+  /// ocorrência de cada tipo É uma das quatro seguintes. São 4 e não 3 porque o
+  /// 50% acontece DUAS vezes por mês sinódico (crescente, entre a nova e a
+  /// cheia; minguante, entre a cheia e a nova) — com só uma delas sobrava um vão
+  /// de duas semanas entre a nova e a cheia.
   static List<_PhaseEvent> _upcoming(MoonStatus status) {
     final events = <_PhaseEvent>[
       (illumination: 0, litDirectionRad: 0, at: status.nextNewMoon),
       (illumination: 1, litDirectionRad: 0, at: status.nextFullMoon),
-      (
-        illumination: 0.5,
-        litDirectionRad: status.nextHalfMoon.waxing ? 0 : pi,
-        at: status.nextHalfMoon.when,
-      ),
+      for (final half in status.nextHalfMoons)
+        (
+          illumination: 0.5,
+          litDirectionRad: half.waxing ? 0 : pi,
+          at: half.when,
+        ),
     ];
     events.sort((a, b) => a.at.compareTo(b.at));
     return events;
   }
-
-  /// O nome do evento, para leitor de tela — o painel mostra só o desenho.
-  static String _eventLabel(_PhaseEvent event) => switch (event.illumination) {
-    <= 0.01 => 'Próxima lua nova',
-    >= 0.99 => 'Próxima lua cheia',
-    _ =>
-      event.litDirectionRad == 0
-          ? 'Próxima metade crescente'
-          : 'Próxima metade minguante',
-  };
 }
 
 /// Um evento de fase no painel: como desenhar o disco ([illumination] e
@@ -235,6 +214,69 @@ typedef _PhaseEvent = ({
   double litDirectionRad,
   DateTime at,
 });
+
+/// As próximas fases numa linha só: cada uma com o desenho da fase em cima e a
+/// data (dia e mês) embaixo.
+///
+/// `spaceBetween` e NÃO `Expanded`: com células flexíveis, cada item ficava
+/// centrado na sua cota e sobrava um pedaço morto nas DUAS pontas da linha — o
+/// vão que sobra tem de ficar ENTRE os itens, que é onde ele separa um do outro.
+/// Com `spaceBetween` o primeiro item encosta na borda esquerda do conteúdo e o
+/// último na direita, e a largura extra da linha vira espaço entre as fases.
+/// As células ficam do mesmo tamanho na prática porque toda data tem os mesmos
+/// cinco caracteres (`NN/NN`) — medido com Arial: 33,8 pt nas quatro, e 1 pt a
+/// menos só quando entra um `1`, que é mais estreito.
+class _UpcomingStrip extends StatelessWidget {
+  const _UpcomingStrip({required this.events});
+
+  final List<_PhaseEvent> events;
+
+  /// Vão entre duas fases, em pontos. É ele que dá a largura do rodapé (e, com
+  /// ela, a do cartão, já que o painel se dimensiona pelo conteúdo).
+  static const double gap = 18;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        spacing: gap,
+        children: [
+          for (final event in events)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  label: _phaseEventLabel(event),
+                  child: MoonDisc(
+                    illumination: event.illumination,
+                    diameter: 14,
+                    litDirectionRad: event.litDirectionRad,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  formatDayMonth(event.at),
+                  style: TextStyle(fontSize: 13, color: PanelCard.dimTextColor),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// O nome do evento de fase, para leitor de tela — o painel mostra só o desenho.
+String _phaseEventLabel(_PhaseEvent event) => switch (event.illumination) {
+  <= 0.01 => 'Próxima lua nova',
+  >= 0.99 => 'Próxima lua cheia',
+  _ =>
+    event.litDirectionRad == 0
+        ? 'Próxima metade crescente'
+        : 'Próxima metade minguante',
+};
 
 /// O disco da Lua com a fase desenhada: a parte iluminada é branca, a escura é
 /// só um véu claro sobre o que está atrás, e um anel escuro separa o disco do
