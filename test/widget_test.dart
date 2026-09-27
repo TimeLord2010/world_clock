@@ -54,6 +54,42 @@ void main() {
     });
   });
 
+  testWidgets('a tela re-renderiza o mapa a cada 5 minutos', (tester) async {
+    WorldDotMap map() =>
+        tester.widget<WorldDotMap>(find.byType(WorldDotMap).first);
+
+    await tester.pumpWidget(WorldClockApp(locationLookup: noLocation));
+    await tester.pump();
+
+    // O tique é um `setState` que reconstrói a tela com `_now` novo, então
+    // uma instância NOVA de `WorldDotMap` É o tique. `hasScheduledFrame` não
+    // serve (o `pump` consome o frame que o próprio tique agendou) e comparar
+    // `_now` também não (o relógio falso do teste não move `DateTime.now()`).
+    var previous = map();
+
+    Future<void> advance(int minutes, {required bool tick}) async {
+      await tester.pump(Duration(minutes: minutes));
+      final current = map();
+      expect(
+        identical(previous, current),
+        !tick,
+        reason: tick
+            ? 'faltou o tique depois de $minutes min'
+            : 'tique indesejado antes dos 5 min',
+      );
+      previous = current;
+    }
+
+    // Dois ciclos: um único tique também apareceria com um intervalo errado.
+    await advance(4, tick: false);
+    await advance(1, tick: true);
+    await advance(4, tick: false);
+    await advance(1, tick: true);
+
+    // Desmonta para o ticker da tela ser cancelado.
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('dot map renders solar shading without errors', (tester) async {
     await tester.runAsync(() async {
       await tester.pumpWidget(

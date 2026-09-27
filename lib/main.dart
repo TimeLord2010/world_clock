@@ -80,12 +80,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     super.initState();
     unawaited(_refreshLocation());
     // Keep the day/night boundary moving: refresh the reference instant
-    // every 15 minutes (the sun moves ~3.75° of longitude in that window,
-    // clearly visible on screen; per-minute updates are imperceptible).
-    _ticker = Timer.periodic(const Duration(minutes: 15), (_) {
+    // every 5 minutes (the sun moves ~1,25° of longitude in that window —
+    // about one cell of the 1° dot grid; the old 15-minute step was ~3,75°).
+    _ticker = Timer.periodic(const Duration(minutes: 5), (_) {
       setState(() {
         _now = DateTime.now();
-        // A Lua anda ~0,14° em 15 min — menos de 1 px no mapa, então o mesmo
+        // A Lua anda ~0,04° em 5 min — menos de 1 px no mapa, então o mesmo
         // tique serve para ela. Se um dia quiser movimento contínuo, o
         // marcador está FORA do RepaintBoundary do mapa: dá para atualizá-lo
         // sozinho, sem repintar os pontos.
@@ -93,7 +93,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       });
       // O Mac não sai do lugar, mas a RESPOSTA pode mudar: quem negou a
       // permissão e depois autorizou só ganha o ponto porque este tique
-      // pergunta de novo. Uma consulta a cada 15 min é barata (a posição do
+      // pergunta de novo. Uma consulta a cada 5 min é barata (a posição do
       // sistema vem do cache do Wi-Fi, o IP é uma requisição curta).
       unawaited(_refreshLocation());
     });

@@ -228,7 +228,7 @@ void main() {
         reason: 'a posição chegando não pode sujar os pontos do mapa',
       );
 
-      // Desmonta para o ticker de 15 min da tela ser cancelado.
+      // Desmonta para o ticker da tela ser cancelado.
       await tester.pumpWidget(const SizedBox());
     });
 
