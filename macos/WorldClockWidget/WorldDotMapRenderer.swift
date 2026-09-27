@@ -23,7 +23,7 @@ struct WorldDotMapRenderer {
     // Parity with the Flutter painter (world_dot_map.dart): 0.30 keeps the
     // night side readable against #111111 (0.10 was too dark).
     static let minBrightness = 0.30
-    let oceanColor: (r: Double, g: Double, b: Double) = (110 / 255, 110 / 255, 110 / 255) // #6E6E6E
+    let oceanColor: (r: Double, g: Double, b: Double) = (90 / 255, 90 / 255, 90 / 255) // #5A5A5A
     /// Ocean night floor — dimmer than the land, so the continents stay the
     /// brightest thing on the night side.
     static let oceanMinBrightness = 0.15
@@ -33,6 +33,20 @@ struct WorldDotMapRenderer {
     static let gridRows = 180
 
     private static var cached: (key: String, image: CGImage)?
+
+    /// Colours are built in the sRGB space on purpose. `CGColor(red:green:
+    /// blue:alpha:)` creates them in Apple's *generic* RGB (gamma 1.8) and the
+    /// system re-encodes them when drawing, so `110/255` came out as 129 on
+    /// screen — the widget's palette was lighter than the app's. With the
+    /// explicit sRGB space the components are the literal values, so the
+    /// widget matches `WorldDotMap`'s defaults.
+    private static let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+
+    /// sRGB colour from components in [0, 1] plus an alpha in [0, 1].
+    private static func color(_ c: (r: Double, g: Double, b: Double), alpha: Double) -> CGColor {
+        CGColor(colorSpace: srgb, components: [c.r, c.g, c.b, alpha])!
+    }
+
 
     /// Parses the dataset JSON (`[[lon, lat], ...]`) and derives the ocean
     /// layer (the grid complement of the land dots).
@@ -131,7 +145,7 @@ struct WorldDotMapRenderer {
         guard let ctx = CGContext(
             data: nil, width: wPhys, height: hPhys,
             bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
+            space: Self.srgb,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return emptyImage(width: wPhys, height: hPhys) }
 
@@ -185,8 +199,7 @@ struct WorldDotMapRenderer {
 
             let t = SunShading.intensity(latDeg: dot.lat, lonDeg: dot.lon, now: now)
             let level = minBrightness + t * (1 - minBrightness)
-            ctx.setFillColor(CGColor(red: color.r, green: color.g,
-                                     blue: color.b, alpha: level))
+            ctx.setFillColor(WorldDotMapRenderer.color(color, alpha: level))
 
             // Pixel-snapped center inside the map rect; CGContext y grows
             // upward, so flip.
@@ -200,10 +213,9 @@ struct WorldDotMapRenderer {
     private func emptyImage(width: Int, height: Int) -> CGImage {
         let ctx = CGContext(data: nil, width: max(width, 1), height: max(height, 1),
                             bitsPerComponent: 8, bytesPerRow: 0,
-                            space: CGColorSpaceCreateDeviceRGB(),
+                            space: WorldDotMapRenderer.srgb,
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
-                                 blue: backgroundColor.b, alpha: 1))
+        ctx.setFillColor(WorldDotMapRenderer.color(backgroundColor, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: max(width, 1), height: max(height, 1)))
         return ctx.makeImage()!
     }

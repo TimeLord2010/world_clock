@@ -54,9 +54,11 @@ class WorldDotMap extends StatefulWidget {
   /// used each time the painter repaints.
   final DateTime? now;
 
-  /// Default daylight color of the ocean: a neutral mid gray — dim enough
-  /// that the orange continents stay the only color on screen.
-  static const Color defaultOceanColor = Color(0xFF6E6E6E);
+  /// Default daylight color of the ocean: a neutral gray — dark enough that
+  /// the sea texture never competes with the orange continents (the previous
+  /// #6E6E6E read as too light, especially on the desktop widget, where the
+  /// generic-RGB → sRGB re-encode lit it up to ~129).
+  static const Color defaultOceanColor = Color(0xFF5A5A5A);
 
   /// Columns of the source grid (1° of longitude per cell).
   static const int gridColumns = 360;
