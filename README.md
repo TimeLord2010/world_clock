@@ -50,6 +50,36 @@ on the map or take it off. The eye on a saved city pins its clock.
   that disappears from the catalog after a regeneration is dropped
   silently rather than blocking the app.
 
+## Click anywhere on the map
+
+Clicking any point drops a target marker and answers with the local time
+there, and the answer is offline: the TZBB polygon when the point is land,
+a nautical 15° band when it is open ocean (the polygons stop ~22 km
+offshore, and `Etc/GMT+2` is UTC−2 — the POSIX sign is inverted).
+
+- The **time comes first and never waits for the network**. The exact
+  **name** is a second phase: the nearest catalog city within 250 km gives
+  it right away, and only when that is missing or approximate (over 50 km)
+  is the network asked for a better one. A slow or dead network costs the
+  name, never the clock.
+- Names are never invented. Open ocean says **Mar aberto**, land with no
+  city within 250 km says **Sem cidade por perto**, and an approximate name
+  is written as `≈ Djanet · a 181 km` instead of pretending the click was
+  in Djanet.
+- Clicking a saved city's ring still selects that city; a map click closes
+  an open city card, because the attention just moved.
+- Each click carries a generation: a name that arrives after you clicked
+  somewhere else is discarded rather than labelling the new card with the
+  old place.
+- Limits worth knowing: the map has no zoom, so a click resolves to about
+  0.3° (~33 km at a 1200 pt window), and 76% of the surface is ocean, where
+  there is no city name to be had in the first place. The saved-cities list
+  is the precise path; this is the exploratory one.
+- The only network use is the name reserve
+  (`api.bigdatacloud.net/data/reverse-geocode-client`, no key), it is only
+  consulted when the offline name is missing or approximate, and responses
+  are cached per 0.25° cell so neighbouring clicks do not repeat a request.
+
 ## City catalog
 
 `assets/cities.json` is generated, never hand-edited:
