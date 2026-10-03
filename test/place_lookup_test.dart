@@ -48,10 +48,7 @@ void main() {
       );
 
       expect(info.location.name, 'Etc/GMT+2');
-      expect(
-        info.location.zones.first.offset,
-        const Duration(hours: -2),
-      );
+      expect(info.location.zones.first.offset, const Duration(hours: -2));
     });
 
     test('responde em qualquer canto do mapa, sem exceção', () async {
@@ -219,9 +216,7 @@ void main() {
 
       await lookup.lookup(fortaleza);
       // 0,1° ao lado: mesma célula de 0,25°.
-      await lookup.lookup(
-        const MapPoint(latitude: -3.8, longitude: -38.6),
-      );
+      await lookup.lookup(const MapPoint(latitude: -3.8, longitude: -38.6));
 
       expect(hits, 1, reason: 'cliques vizinhos não repetem a requisição');
       expect(lookup.requestCount, 1);
@@ -265,10 +260,7 @@ void main() {
     });
 
     test('Fortaleza–São Paulo bate com a referência (2.365,5 km)', () {
-      expect(
-        distanceKm(-3.748, -38.582, -23.55, -46.63),
-        closeTo(2365.5, 1),
-      );
+      expect(distanceKm(-3.748, -38.582, -23.55, -46.63), closeTo(2365.5, 1));
     });
 
     test('não usa a diferença em graus', () {

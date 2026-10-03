@@ -74,11 +74,7 @@ void main() {
       );
       expect(
         offset,
-        MoonMarker.offsetFor(
-          fortaleza.longitude,
-          fortaleza.latitude,
-          mapSize,
-        ),
+        MoonMarker.offsetFor(fortaleza.longitude, fortaleza.latitude, mapSize),
       );
     });
 
@@ -198,11 +194,7 @@ void main() {
       tester,
     ) async {
       final tokyo = clocks[1];
-      await pumpMarkers(
-        tester,
-        cities: [tokyo],
-        pinnedIds: {tokyo.city.id},
-      );
+      await pumpMarkers(tester, cities: [tokyo], pinnedIds: {tokyo.city.id});
 
       expect(find.text('Tóquio'), findsOneWidget);
       expect(find.text('Japão'), findsOneWidget);
@@ -266,11 +258,7 @@ void main() {
 
     testWidgets('o overlay nunca cobre o próprio disco', (tester) async {
       for (final clock in clocks) {
-        await pumpMarkers(
-          tester,
-          cities: [clock],
-          pinnedIds: {clock.city.id},
-        );
+        await pumpMarkers(tester, cities: [clock], pinnedIds: {clock.city.id});
 
         final mapRect = tester.getRect(find.byType(CityMarkers));
         final center =

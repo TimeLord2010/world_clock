@@ -109,9 +109,7 @@ String formatUtcOffset(Duration offset) {
   final absolute = totalMinutes.abs();
   final hours = _two(absolute ~/ 60);
   final minutes = absolute % 60;
-  return minutes == 0
-      ? 'UTC$sign$hours'
-      : 'UTC$sign$hours:${_two(minutes)}';
+  return minutes == 0 ? 'UTC$sign$hours' : 'UTC$sign$hours:${_two(minutes)}';
 }
 
 /// A diferença de DIA entre dois relógios de parede: `''`, `'+1 dia'`,

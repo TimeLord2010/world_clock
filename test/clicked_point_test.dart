@@ -209,7 +209,9 @@ void main() {
       await tearDownScreen(tester);
     });
 
-    testWidgets('nome aproximado sai com "≈" e com a distância', (tester) async {
+    testWidgets('nome aproximado sai com "≈" e com a distância', (
+      tester,
+    ) async {
       await pumpScreen(tester);
 
       // 180,6 km de Djanet: dentro do raio de nome, longe demais para passar
@@ -288,9 +290,7 @@ void main() {
       await pumpScreen(tester, savedCities: {fortaleza.id});
 
       final mapRect = tester.getRect(find.byType(WorldDotMap));
-      final discCenter =
-          mapRect.topLeft +
-          atFortaleza.offsetIn(mapRect.size);
+      final discCenter = mapRect.topLeft + atFortaleza.offsetIn(mapRect.size);
       await tester.tapAt(discCenter);
       await tester.pump();
 
@@ -315,16 +315,12 @@ void main() {
       await pumpScreen(tester, savedCities: {fortaleza.id});
 
       final mapRect = tester.getRect(find.byType(WorldDotMap));
-      await tester.tapAt(
-        mapRect.topLeft + atFortaleza.offsetIn(mapRect.size),
-      );
+      await tester.tapAt(mapRect.topLeft + atFortaleza.offsetIn(mapRect.size));
       await tester.pump();
       expect(find.byType(PanelCard), findsOneWidget);
 
       // Um clique longe: a atenção vai para onde o usuário clicou.
-      await tester.tapAt(
-        mapRect.topLeft + atSea.offsetIn(mapRect.size),
-      );
+      await tester.tapAt(mapRect.topLeft + atSea.offsetIn(mapRect.size));
       await tester.pump();
       await tester.pump();
 

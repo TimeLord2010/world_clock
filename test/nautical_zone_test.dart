@@ -26,7 +26,8 @@ void main() {
         expect(
           offsetOf(id),
           Duration(hours: band),
-          reason: 'lon $longitude devia ser UTC${band >= 0 ? '+' : ''}$band '
+          reason:
+              'lon $longitude devia ser UTC${band >= 0 ? '+' : ''}$band '
               '(id $id)',
         );
       }

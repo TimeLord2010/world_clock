@@ -139,10 +139,7 @@ class CityMarkers extends StatelessWidget {
       }
     }
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [...discs, ...overlays],
-    );
+    return Stack(clipBehavior: Clip.none, children: [...discs, ...overlays]);
   }
 
   /// O disco clicável de uma cidade.
@@ -170,7 +167,8 @@ class CityMarkers extends StatelessWidget {
       child: Semantics(
         // O leitor de tela recebe o horário junto: só o nome da cidade não
         // responde à pergunta que o mapa está ali para responder.
-        label: '$label: ${reading.time}'
+        label:
+            '$label: ${reading.time}'
             '${reading.dayOffset.isEmpty ? '' : ' (${reading.dayOffset})'}',
         button: onSelect != null,
         child: onSelect == null
@@ -250,10 +248,7 @@ class CityMarkers extends StatelessWidget {
                 ),
                 Text(
                   reading.offset,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: PanelCard.dimTextColor,
-                  ),
+                  style: TextStyle(fontSize: 11, color: PanelCard.dimTextColor),
                 ),
               ],
             ),
@@ -262,6 +257,7 @@ class CityMarkers extends StatelessWidget {
       ),
     );
   }
+
   /// O alvo do ponto clicado.
   ///
   /// `IgnorePointer`: ele é informação, não um controle. Um clique em cima dele

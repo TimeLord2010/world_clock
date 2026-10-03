@@ -184,7 +184,8 @@ void main() {
       expect(
         duskCom,
         greaterThan(duskSem + 12),
-        reason: 'o ponto de terra no fim da tarde tem de estar visivelmente '
+        reason:
+            'o ponto de terra no fim da tarde tem de estar visivelmente '
             'mais claro com o crepúsculo ligado',
       );
 

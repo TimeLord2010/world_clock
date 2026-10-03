@@ -35,8 +35,7 @@ class SavedCities {
   );
 
   @override
-  String toString() =>
-      'SavedCities(selected: $selected, pinned: $pinned)';
+  String toString() => 'SavedCities(selected: $selected, pinned: $pinned)';
 }
 
 /// Onde a escolha do usuário fica entre execuções.

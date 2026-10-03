@@ -164,9 +164,10 @@ void main() {
       // 27/09 → 50% minguante (03/10); 04/10 → 50% crescente (18/10). O lado não
       // é "sempre minguante": é o lado da próxima passagem, seja qual for.
       expect(
-        MoonPosition.at(
-          DateTime.utc(2026, 9, 27, 19),
-        ).nextHalfMoons.first.waxing,
+        MoonPosition.at(DateTime.utc(2026, 9, 27, 19))
+            .nextHalfMoons
+            .first
+            .waxing,
         isFalse,
       );
       expect(

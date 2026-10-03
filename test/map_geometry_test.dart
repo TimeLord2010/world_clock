@@ -31,7 +31,10 @@ void main() {
     test('os cantos do quadrado unitário são os cantos do mundo', () {
       expect(WorldDotMap.unproject(Offset.zero), const Offset(-180, 90));
       expect(WorldDotMap.unproject(const Offset(1, 0)), const Offset(180, 90));
-      expect(WorldDotMap.unproject(const Offset(0, 1)), const Offset(-180, -90));
+      expect(
+        WorldDotMap.unproject(const Offset(0, 1)),
+        const Offset(-180, -90),
+      );
       expect(WorldDotMap.unproject(const Offset(1, 1)), const Offset(180, -90));
     });
 
@@ -129,7 +132,10 @@ void main() {
         longitude: fortaleza.longitude,
       );
 
-      expect(point.offsetIn(mapSize), CityMarkers.offsetFor(fortaleza, mapSize));
+      expect(
+        point.offsetIn(mapSize),
+        CityMarkers.offsetFor(fortaleza, mapSize),
+      );
     });
   });
 }

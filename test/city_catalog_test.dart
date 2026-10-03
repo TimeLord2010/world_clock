@@ -75,7 +75,9 @@ void main() {
     test('a procedência e a atribuição viajam dentro do asset', () async {
       // A licença dos polígonos (ODbL) exige atribuição: ela mora no `source`
       // do próprio asset, e um asset regerado sem ela tem de quebrar aqui.
-      final raw = jsonDecode(await rootBundle.loadString(CityCatalog.assetPath));
+      final raw = jsonDecode(
+        await rootBundle.loadString(CityCatalog.assetPath),
+      );
       final decoded = raw as Map<String, dynamic>;
 
       expect(decoded['version'], 1);
@@ -86,20 +88,22 @@ void main() {
       expect(source, contains('ODbL'));
     });
 
-    test('Fortaleza está lá, com o fuso do Ceará e o país em português',
-        () async {
-      final cities = await CityCatalog.load();
-      final fortaleza = cities.firstWhere(
-        (city) => city.name == 'Fortaleza' && city.region == 'Ceará',
-      );
+    test(
+      'Fortaleza está lá, com o fuso do Ceará e o país em português',
+      () async {
+        final cities = await CityCatalog.load();
+        final fortaleza = cities.firstWhere(
+          (city) => city.name == 'Fortaleza' && city.region == 'Ceará',
+        );
 
-      expect(fortaleza.countryCode, 'BR');
-      expect(fortaleza.countryName, 'Brasil');
-      expect(fortaleza.timeZoneId, 'America/Fortaleza');
-      expect(fortaleza.contextLabel, 'Ceará, Brasil');
-      expect(fortaleza.latitude, closeTo(-3.748, 0.01));
-      expect(fortaleza.longitude, closeTo(-38.582, 0.01));
-    });
+        expect(fortaleza.countryCode, 'BR');
+        expect(fortaleza.countryName, 'Brasil');
+        expect(fortaleza.timeZoneId, 'America/Fortaleza');
+        expect(fortaleza.contextLabel, 'Ceará, Brasil');
+        expect(fortaleza.latitude, closeTo(-3.748, 0.01));
+        expect(fortaleza.longitude, closeTo(-38.582, 0.01));
+      },
+    );
   });
 
   group('dobra para busca', () {
@@ -187,7 +191,11 @@ void main() {
         'sydney',
       ).where((city) => city.name == 'Sydney').toList();
 
-      expect(found.length, greaterThanOrEqualTo(2), reason: 'Austrália e Canadá');
+      expect(
+        found.length,
+        greaterThanOrEqualTo(2),
+        reason: 'Austrália e Canadá',
+      );
       expect(
         found.map((city) => city.countryCode).toSet(),
         containsAll(<String>{'AU', 'CA'}),
@@ -195,7 +203,10 @@ void main() {
       // A maior primeiro (Austrália), e a linha de contexto é o que separa uma
       // da outra na lista.
       expect(found.first.countryCode, 'AU');
-      expect(found.map((city) => city.contextLabel).toSet().length, found.length);
+      expect(
+        found.map((city) => city.contextLabel).toSet().length,
+        found.length,
+      );
     });
 
     test('consulta que não casa com nada devolve vazio', () {

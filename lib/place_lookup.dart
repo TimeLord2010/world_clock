@@ -325,8 +325,7 @@ class BigDataCloudNameLookup implements PlaceNameLookup {
     }
   }
 
-  static String _text(Object? value) =>
-      value is String ? value.trim() : '';
+  static String _text(Object? value) => value is String ? value.trim() : '';
 }
 
 /// Distância em km entre dois pontos, pela fórmula do haversine.

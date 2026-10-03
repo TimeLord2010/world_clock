@@ -148,8 +148,9 @@ void main() {
       expect(find.text(longest.name), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'layout estourou');
 
-      final paragraph =
-          tester.renderObject<RenderParagraph>(find.text(longest.name));
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text(longest.name),
+      );
       expect(
         paragraph.didExceedMaxLines,
         isTrue,
@@ -259,7 +260,10 @@ void main() {
   });
 
   group('chegando pelo menu', () {
-    Future<void> pumpMenu(WidgetTester tester, {Set<String> saved = const {}}) async {
+    Future<void> pumpMenu(
+      WidgetTester tester, {
+      Set<String> saved = const {},
+    }) async {
       await tester.binding.setSurfaceSize(const Size(900, 700));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(

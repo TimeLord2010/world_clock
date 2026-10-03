@@ -60,9 +60,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const store = SharedPreferencesCityStore();
 
-      await store.save(
-        const SavedCities(selected: {'1', '2'}, pinned: {'2'}),
-      );
+      await store.save(const SavedCities(selected: {'1', '2'}, pinned: {'2'}));
 
       // Lê do zero, como numa abertura nova do app.
       final reloaded = await const SharedPreferencesCityStore().load();
