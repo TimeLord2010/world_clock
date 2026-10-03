@@ -45,7 +45,7 @@ void main() {
     test('metade de cima ancora por cima', () {
       final anchor = anchorAt(600, 50);
 
-      expect(anchor.top, 50 + gap);
+      expect(anchor.top, 50 + radius + gap);
       expect(anchor.bottom, isNull);
     });
 
@@ -53,7 +53,7 @@ void main() {
       final anchor = anchorAt(600, 550);
 
       expect(anchor.top, isNull);
-      expect(anchor.bottom, mapSize.height - 550 + gap);
+      expect(anchor.bottom, mapSize.height - 550 + radius + gap);
     });
 
     test('bem no meio ancora por baixo (empate vai para lá)', () {
@@ -64,14 +64,18 @@ void main() {
     });
   });
 
-  test('o afastamento horizontal desconta o raio; o vertical conta do centro', () {
-    // A assimetria é a da Lua desde sempre: mexer nela mudaria a posição de um
-    // painel já validado (e o teste "o overlay nunca cobre o disco" é quem
-    // garante que ela não encosta no marcador).
+  test('o afastamento é o mesmo nos dois eixos e conta da BORDA', () {
+    // `radius + gap` nas quatro direções: a folga é `gap` de verdade, nos dois
+    // eixos. Enquanto o vertical contava do centro, a folga vertical era
+    // `gap - radius` (3 pt com raio 7 e gap 10) e o rótulo não podia chegar mais
+    // perto do marcador sem encostar nele.
     final anchor = anchorAt(300, 200);
 
     expect(anchor.left, 300 + radius + gap);
-    expect(anchor.top, 200 + gap);
+    expect(anchor.top, 200 + radius + gap);
+    // E, nos dois eixos, a folga real até a borda do marcador é o `gap` pedido.
+    expect(anchor.left! - (300 + radius), gap);
+    expect(anchor.top! - (200 + radius), gap);
   });
 
   test('os quatro cantos escolhem os lados de fora', () {
@@ -104,7 +108,7 @@ void main() {
 
     final positioned = tester.widget<Positioned>(find.byType(Positioned));
     expect(positioned.left, 100 + radius + gap);
-    expect(positioned.top, 100 + gap);
+    expect(positioned.top, 100 + radius + gap);
     expect(
       find.descendant(
         of: find.byType(Positioned),

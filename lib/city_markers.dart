@@ -58,8 +58,21 @@ class CityMarkers extends StatelessWidget {
   /// continuar visível em qualquer tamanho de janela.
   static const double diameter = 14;
 
-  /// Distância entre o disco e o rótulo, em pontos.
-  static const double gap = 10;
+  /// Folga entre a BORDA do anel e a caixa do rótulo, em pontos, nos DOIS eixos.
+  ///
+  /// **Pode ser negativa, e é.** A caixa do rótulo inclui o espaço que a fonte
+  /// reserva acima das maiúsculas e abaixo da linha de base; com folga positiva
+  /// esse espaço aparecia como distância entre o texto e o ponto, e era ele —
+  /// não a folga — que dominava o afastamento percebido. Encostando a CAIXA
+  /// dentro do quadrado do disco, a tinta das letras chega perto do anel sem
+  /// encostar nele.
+  ///
+  /// O limite é geométrico e está aqui: o canto da caixa fica a
+  /// `(radius + gap)·√2` do centro, e o anel tem raio `radius`. Com
+  /// `radius = 7`, `gap = -2` dá `5·√2 ≈ 7,07` — o canto exatamente sobre o
+  /// círculo, e a tinta (que começa mais para dentro que o canto) ainda com
+  /// folga. Mais negativo que isso, a caixa invade o anel de verdade.
+  static const double gap = -2;
 
   /// Corpo do nome da cidade.
   static const double nameFontSize = 11;

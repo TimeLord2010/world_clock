@@ -231,23 +231,35 @@ void main() {
       expect(find.text('+1 dia'), findsNothing);
     });
 
-    testWidgets('o rótulo nunca cobre o próprio disco', (tester) async {
+    testWidgets('o rótulo nunca cobre o ANEL', (tester) async {
+      // Contra o CÍRCULO, e não contra o quadrado que o contém: com o rótulo
+      // encostado, a caixa dele invade os cantos desse quadrado — e ali não há
+      // anel nenhum, porque o marcador é redondo. O que não pode acontecer é a
+      // caixa cruzar o círculo.
       for (final clock in clocks) {
         await pumpMarkers(tester, cities: [clock]);
 
         final mapRect = tester.getRect(find.byType(CityMarkers));
         final center =
             mapRect.topLeft + CityMarkers.offsetFor(clock.city, mapRect.size);
-        final disc = Rect.fromCenter(
-          center: center,
-          width: CityMarkers.diameter,
-          height: CityMarkers.diameter,
+        final label = tester.getRect(
+          find.descendant(
+            of: find.byType(CityMarkers),
+            matching: find.byType(Column),
+          ),
+        );
+
+        // Ponto da caixa mais próximo do centro; a distância dele ao centro não
+        // pode ser menor que o raio do anel.
+        final nearest = Offset(
+          center.dx.clamp(label.left, label.right).toDouble(),
+          center.dy.clamp(label.top, label.bottom).toDouble(),
         );
 
         expect(
-          tester.getRect(find.text(clock.city.name)).overlaps(disc),
-          isFalse,
-          reason: 'rótulo cobriu o disco de ${clock.city.name}',
+          (nearest - center).distance,
+          greaterThanOrEqualTo(CityMarkers.diameter / 2),
+          reason: 'rótulo cruzou o anel de ${clock.city.name}',
         );
       }
     });
@@ -266,6 +278,51 @@ void main() {
         greaterThan(discCenter.dx),
         reason: 'Fortaleza não está colada na borda; o rótulo abre à direita',
       );
+    });
+
+    testWidgets('o rótulo encosta no ponto: a folga é a mesma nos dois eixos', (
+      tester,
+    ) async {
+      // Este é o teste que trava o "quão perto": a caixa do rótulo fica a
+      // `CityMarkers.gap` da BORDA do disco, de lado e em cima/baixo, e nos dois
+      // quadrantes (Fortaleza fica com o rótulo acima e à direita, Tóquio abaixo
+      // e à esquerda). Enquanto o eixo vertical não somava o raio, a folga ali
+      // era `gap - raio` — bem menor que a horizontal.
+      for (final clock in clocks) {
+        await pumpMarkers(tester, cities: [clock]);
+
+        final mapRect = tester.getRect(find.byType(CityMarkers));
+        final center =
+            mapRect.topLeft + CityMarkers.offsetFor(clock.city, mapRect.size);
+        final label = tester.getRect(
+          find.descendant(
+            of: find.byType(CityMarkers),
+            matching: find.byType(Column),
+          ),
+        );
+
+        // Medido do CENTRO, não da borda do disco: com folga negativa a caixa
+        // do rótulo invade o quadrado do disco, e uma medida "borda com borda"
+        // trocaria de sinal e de referência.
+        final horizontal = label.left >= center.dx
+            ? label.left - center.dx
+            : center.dx - label.right;
+        final vertical = label.top >= center.dy
+            ? label.top - center.dy
+            : center.dy - label.bottom;
+        const expected = CityMarkers.diameter / 2 + CityMarkers.gap;
+
+        expect(
+          horizontal,
+          closeTo(expected, 0.01),
+          reason: 'afastamento horizontal em ${clock.city.name}',
+        );
+        expect(
+          vertical,
+          closeTo(expected, 0.01),
+          reason: 'afastamento vertical em ${clock.city.name}',
+        );
+      }
     });
 
     testWidgets('nenhum texto do rótulo sai cortado', (tester) async {

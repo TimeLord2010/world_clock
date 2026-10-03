@@ -23,11 +23,13 @@ class MapOverlayAnchor {
   final double? bottom;
 
   /// A âncora de um marcador de raio [radius] centrado em [center], num mapa de
-  /// [mapSize], afastada do disco por [gap].
+  /// [mapSize], afastada da BORDA do marcador por [gap].
   ///
-  /// O afastamento horizontal desconta o raio (o cartão começa fora do disco);
-  /// o vertical conta do CENTRO, e não da borda do disco — é o que a Lua sempre
-  /// fez, e mudar isso mexeria na posição de um painel que já está validado.
+  /// O afastamento é o MESMO nos dois eixos e sempre medido da borda: `radius +
+  /// gap` nas quatro direções. Antes o horizontal descontava o raio e o vertical
+  /// contava do centro, o que dava 3 pt de folga em cima/embaixo contra 10 pt
+  /// dos lados — e impedia aproximar um rótulo do marcador, porque na vertical
+  /// qualquer `gap` menor que o raio encostava no disco.
   ///
   /// Empate no meio exato do mapa vai para a direita/para baixo (`<=`).
   factory MapOverlayAnchor.forMarker({
@@ -38,11 +40,12 @@ class MapOverlayAnchor {
   }) {
     final toRight = center.dx <= mapSize.width / 2;
     final below = center.dy <= mapSize.height / 2;
+    final reach = radius + gap;
     return MapOverlayAnchor(
-      left: toRight ? center.dx + radius + gap : null,
-      right: toRight ? null : mapSize.width - center.dx + radius + gap,
-      top: below ? center.dy + gap : null,
-      bottom: below ? null : mapSize.height - center.dy + gap,
+      left: toRight ? center.dx + reach : null,
+      right: toRight ? null : mapSize.width - center.dx + reach,
+      top: below ? center.dy + reach : null,
+      bottom: below ? null : mapSize.height - center.dy + reach,
     );
   }
 
