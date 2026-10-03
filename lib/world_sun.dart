@@ -65,8 +65,7 @@ class SunShading {
       // at +12°, but 0 only at −6° — so the point crosses the dark end while
       // the sky outside still has light.
       final altDeg = alt * 180 / pi;
-      return ((altDeg + _civilTwilightDeg) /
-              (_twilightDeg + _civilTwilightDeg))
+      return ((altDeg + _civilTwilightDeg) / (_twilightDeg + _civilTwilightDeg))
           .clamp(0.0, 1.0);
     }
     return (alt / (_twilightDeg * pi / 180)).clamp(0.0, 1.0);

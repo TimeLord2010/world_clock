@@ -45,6 +45,12 @@ dependencies:
   # Guarda só ids do catálogo — ver lib/city_store.dart.
   shared_preferences: ^2.5.5
 
+  # Segurar a tela ligada (ver lib/keep_awake.dart). É um pacote, e não código
+  # nativo escrito aqui, de propósito: ele já tem implementação para cada
+  # plataforma (Android, iOS, macOS, Windows, Linux e web), então a opção
+  # atravessa o port para Android sem exigir código nativo novo para manter.
+  wakelock_plus: ^1.8.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

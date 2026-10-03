@@ -12,6 +12,10 @@ every 5 minutes.
   (`assets/cities.json`) whose time zones are resolved **offline** from the
   IANA tzdb, so each saved city gets a dot on the map with its name and
   local time always in view.
+- Keep-screen-on (`lib/keep_awake.dart`): an option that holds the display
+  awake through `wakelock_plus` while the app is open, so the map can stay
+  on screen without the screen going dark — on every platform the package
+  supports, with no native code of our own to maintain.
 - macOS widget (`macos/WorldClockWidget/`): WidgetKit extension that
   renders the same map natively (Swift port of the shading and renderer,
   parity-checked against the Dart code). Fully autonomous: the dot
@@ -55,6 +59,35 @@ on the map or take it off.
 
 Worth knowing: with `Cidades` carrying a long list, the labels can overlap
 where cities are close together — there is no collision avoidance yet.
+
+## Keeping the screen awake
+
+Menu (top right) → **Manter tela ligada**: while it is checked, the app holds
+a `kIOPMAssertionTypePreventUserIdleDisplaySleep` power assertion — the same
+one `caffeinate -d` holds — so the display no longer goes dark on idle. A
+world clock is meant to sit on screen, and macOS puts the display to sleep on
+*user* idle, never on app activity: redrawing the map every 5 minutes does not
+keep the monitor lit.
+
+- **Off by default**, and the choice is persisted (`shared_preferences`), so
+  it comes back the way you left it on the next launch. Only a choice that
+  actually took effect is written: a request the platform refused is never
+  saved as "on", otherwise every following launch would retry it and fail
+  silently.
+- The screen is held awake by **`wakelock_plus`**, not by native code of our
+  own: the package ships the implementation for each platform (Android, iOS,
+  macOS, Windows, Linux, web), so this option needs no new native code when
+  the app is ported. `lib/keep_awake.dart` is the app's own seam over it. On
+  macOS the package holds a `kIOPMAssertionTypePreventUserIdleDisplaySleep`
+  assertion — the display one, the same `caffeinate -d` holds, not the system
+  one: the request is "keep the screen on", not "keep the Mac busy". On
+  Android the app declares `android.permission.WAKE_LOCK` in its manifest,
+  which the plugin needs and the plugin cannot declare for us.
+- If the platform refuses, the checkbox goes back to empty and the menu says
+  why — an option that looks on while the display still sleeps would be worse
+  than not offering it.
+- Closing the window quits the app, and the assertion goes with it. The
+  desktop widget is untouched: this is app-only.
 
 ## City catalog
 

@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Manter a tela ligada (ver lib/keep_awake.dart): o `wakelock_plus` já tem
+         a implementação para Android, mas a permissão é declarada pelo APP. Sem
+         esta linha a opção existiria na tela e não faria nada no Android. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:label="world_clock"
         android:name="${applicationName}"

@@ -121,7 +121,10 @@ class City {
     if (latitude == null || longitude == null) {
       throw FormatException('cidade sem coordenada: $row');
     }
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
       throw FormatException('coordenada fora do mundo: $row');
     }
     final timeZoneId = (row[5] as String? ?? '').trim();

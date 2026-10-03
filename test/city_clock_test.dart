@@ -29,20 +29,22 @@ void main() {
       CityClock(await cityNamed(name, region: region));
 
   group('hora de parede', () {
-    test('Fortaleza às 12:00 UTC são 09:00 (UTC-03, sem horário de verão)',
-        () async {
-      final fortaleza = await clockNamed('Fortaleza', region: 'Ceará');
-      final reading = ClockReading.at(
-        fortaleza,
-        DateTime.utc(2026, 1, 15, 12),
-        here: DateTime.utc(2026, 1, 15, 12),
-      );
+    test(
+      'Fortaleza às 12:00 UTC são 09:00 (UTC-03, sem horário de verão)',
+      () async {
+        final fortaleza = await clockNamed('Fortaleza', region: 'Ceará');
+        final reading = ClockReading.at(
+          fortaleza,
+          DateTime.utc(2026, 1, 15, 12),
+          here: DateTime.utc(2026, 1, 15, 12),
+        );
 
-      expect(fortaleza.wallClock(DateTime.utc(2026, 1, 15, 12)).hour, 9);
-      expect(reading.time, '09:00');
-      expect(reading.offset, 'UTC-03');
-      expect(reading.dayOffset, '');
-    });
+        expect(fortaleza.wallClock(DateTime.utc(2026, 1, 15, 12)).hour, 9);
+        expect(reading.time, '09:00');
+        expect(reading.offset, 'UTC-03');
+        expect(reading.dayOffset, '');
+      },
+    );
 
     test('Tóquio às 12:00 UTC são 21:00 (UTC+09)', () async {
       final tokyo = await clockNamed('Tóquio');
@@ -146,7 +148,10 @@ void main() {
       // Vinte minutos de diferença e um dia de calendário: é o dia que
       // interessa a quem lê um relógio mundial.
       expect(
-        formatDayOffset(DateTime(2026, 10, 4, 0, 10), DateTime(2026, 10, 3, 23, 50)),
+        formatDayOffset(
+          DateTime(2026, 10, 4, 0, 10),
+          DateTime(2026, 10, 3, 23, 50),
+        ),
         '+1 dia',
       );
     });

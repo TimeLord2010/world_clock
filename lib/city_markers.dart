@@ -133,10 +133,7 @@ class CityMarkers extends StatelessWidget {
       labels.add(_label(clock, center));
     }
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [...discs, ...labels],
-    );
+    return Stack(clipBehavior: Clip.none, children: [...discs, ...labels]);
   }
 
   /// O disco de uma cidade, com o rótulo inteiro no `Semantics`.
@@ -158,7 +155,8 @@ class CityMarkers extends StatelessWidget {
         child: Semantics(
           // O leitor de tela recebe o horário junto: só o nome da cidade não
           // responde à pergunta que o mapa está ali para responder.
-          label: '$label: ${reading.time}'
+          label:
+              '$label: ${reading.time}'
               '${reading.dayOffset.isEmpty ? '' : ' (${reading.dayOffset})'}',
           child: SizedBox.square(
             dimension: diameter,

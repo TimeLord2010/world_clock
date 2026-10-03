@@ -49,7 +49,9 @@ void main() {
       // E nunca é negativo, em nenhum ponto do minuto.
       for (var second = 0; second < 60; second++) {
         for (final ms in [0, 1, 500, 998, 999]) {
-          final wait = untilNextMinute(DateTime(2026, 10, 3, 12, 0, second, ms));
+          final wait = untilNextMinute(
+            DateTime(2026, 10, 3, 12, 0, second, ms),
+          );
           expect(
             wait,
             greaterThan(Duration.zero),

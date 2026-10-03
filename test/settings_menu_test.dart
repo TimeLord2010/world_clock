@@ -56,13 +56,16 @@ void main() {
 
   group('bandeja de opções', () {
     /// Monta só a bandeja, com um tema selecionável registrado e, quando o
-    /// teste pede, a lista dos cliques na linha do crepúsculo ([twilight]).
+    /// teste pede, a lista dos cliques na linha do crepúsculo ([twilight]) e na
+    /// da tela ([screenOn]).
     Future<List<MapTheme>> pumpMenu(
       WidgetTester tester, {
       MapTheme theme = MapThemes.standard,
       Size size = const Size(600, 400),
       bool includeTwilight = true,
+      bool keepScreenOn = false,
       List<bool>? twilight,
+      List<bool>? screenOn,
     }) async {
       final picked = <MapTheme>[];
       await tester.binding.setSurfaceSize(size);
@@ -75,6 +78,10 @@ void main() {
               onThemeSelected: picked.add,
               includeTwilight: includeTwilight,
               onTwilightChanged: (value) => twilight?.add(value),
+              keepScreenOn: keepScreenOn,
+              onKeepScreenOnChanged: screenOn == null
+                  ? null
+                  : (value) => screenOn.add(value),
             ),
           ),
         ),
@@ -110,7 +117,8 @@ void main() {
       tester,
     ) async {
       final twilight = <bool>[];
-      await pumpMenu(tester, twilight: twilight);
+      final screenOn = <bool>[];
+      await pumpMenu(tester, twilight: twilight, screenOn: screenOn);
 
       final mouse = await mouseAt(
         tester,
@@ -133,6 +141,11 @@ void main() {
       await mouse.moveTo(tester.getCenter(find.text('Incluir crepúsculo')));
       await tester.pumpAndSettle();
       expect(twilight, isEmpty);
+
+      // …e a linha da tela segue a mesma regra.
+      await mouse.moveTo(tester.getCenter(find.text('Manter tela ligada')));
+      await tester.pumpAndSettle();
+      expect(screenOn, isEmpty);
 
       await mouse.moveTo(const Offset(300, 300));
       await tester.pumpAndSettle();
@@ -167,7 +180,7 @@ void main() {
     testWidgets('clicar no item "Tema" abre o submenu com os dois temas', (
       tester,
     ) async {
-      await pumpMenu(tester);
+      await pumpMenu(tester, screenOn: <bool>[]);
 
       await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
@@ -193,10 +206,11 @@ void main() {
       // Nenhum rótulo sai cortado: o painel é dimensionado pelo conteúdo, então
       // até a fonte do flutter_test (1 em por caractere, bem mais larga que a
       // fonte real) cabe inteira. Se alguém voltar a fixar a largura do painel,
-      // é aqui que quebra.
+      // é aqui que quebra. O rótulo mais longo do painel é o da tela.
       for (final label in [
         'Tema',
         'Incluir crepúsculo',
+        'Manter tela ligada',
         'Padrão',
         'Monocromático branco',
       ]) {
@@ -210,7 +224,9 @@ void main() {
     });
 
     testWidgets('a linha "Incluir crepúsculo" mostra o estado atual na '
-        'caixinha, e clicar avisa a tela com o valor invertido', (tester) async {
+        'caixinha, e clicar avisa a tela com o valor invertido', (
+      tester,
+    ) async {
       final twilight = <bool>[];
       await pumpMenu(tester, includeTwilight: true, twilight: twilight);
 

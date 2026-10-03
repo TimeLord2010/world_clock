@@ -9,6 +9,7 @@ import 'city_catalog.dart';
 import 'city_clock.dart';
 import 'city_clock_layer.dart';
 import 'city_store.dart';
+import 'keep_awake.dart';
 import 'map_theme.dart';
 import 'moon_marker.dart';
 import 'moon_position.dart';
@@ -27,7 +28,12 @@ void main() {
   // tzdb completa, então com `latest` uma cidade legítima derrubaria a abertura
   // do app.
   tzdata.initializeTimeZones();
-  runApp(const WorldClockApp(cityStore: SharedPreferencesCityStore()));
+  runApp(
+    const WorldClockApp(
+      cityStore: SharedPreferencesCityStore(),
+      keepAwake: SystemKeepAwake(),
+    ),
+  );
 }
 
 class WorldClockApp extends StatelessWidget {
@@ -35,6 +41,7 @@ class WorldClockApp extends StatelessWidget {
     super.key,
     this.locationLookup = UserLocationResolver.resolve,
     this.cityStore,
+    this.keepAwake,
   });
 
   /// Como a tela descobre a posição do usuário — repassado para
@@ -45,6 +52,10 @@ class WorldClockApp extends StatelessWidget {
   /// Onde as cidades salvas ficam entre execuções. Repassado para
   /// [WorldMapScreen.cityStore]; nulo desliga a persistência.
   final CityStore? cityStore;
+
+  /// Quem segura a tela acesa. Repassado para [WorldMapScreen.keepAwake]; nulo
+  /// desliga a opção (e ela nem aparece no menu).
+  final KeepAwake? keepAwake;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +73,7 @@ class WorldClockApp extends StatelessWidget {
       home: WorldMapScreen(
         locationLookup: locationLookup,
         cityStore: cityStore,
+        keepAwake: keepAwake,
       ),
     );
   }
@@ -72,6 +84,7 @@ class WorldMapScreen extends StatefulWidget {
     super.key,
     this.locationLookup = UserLocationResolver.resolve,
     this.cityStore,
+    this.keepAwake,
   });
 
   /// Como descobrir a posição do usuário. Injetável para os testes rodarem sem
@@ -86,6 +99,15 @@ class WorldMapScreen extends StatefulWidget {
   /// não se interessam por cidades (a maioria) não precisam saber que isso
   /// existe, e quem quer testar persistência injeta um `MemoryCityStore`.
   final CityStore? cityStore;
+
+  /// Quem segura a tela ligada enquanto o app está aberto (ver `KeepAwake`).
+  ///
+  /// **Nulo é o padrão, e nulo desliga a opção por completo** — inclusive a
+  /// linha no menu (ver `SettingsMenu.onKeepScreenOnChanged`). Mesmo motivo do
+  /// [cityStore]: a implementação de verdade é plugin nativo, e um teste de
+  /// widget que a chamasse sem preparo morreria com `MissingPluginException`.
+  /// Os testes que querem exercitar a opção injetam `MemoryKeepAwake`.
+  final KeepAwake? keepAwake;
 
   @override
   State<WorldMapScreen> createState() => _WorldMapScreenState();
@@ -109,6 +131,18 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// desenho anterior (noite no instante em que o sol cruza o horizonte).
   bool _includeTwilight = true;
 
+  /// "Manter tela ligada": LIGADA significa que o app segura a tela acesa
+  /// enquanto estiver aberto. Desligada por padrão — quem não pediu não tem o
+  /// Mac segurando o sono da tela — e a escolha do usuário é reaplicada na
+  /// abertura seguinte (ver [_restoreKeepAwake]).
+  bool _keepScreenOn = false;
+
+  /// Por que a tela não está sendo mantida acesa, quando o pedido falhou (o
+  /// macOS pode negar a assertion). Nulo no caminho normal. A falha NÃO pode
+  /// ser silenciosa: o usuário acharia a opção ligada e o monitor apagaria do
+  /// mesmo jeito.
+  String? _keepAwakeNotice;
+
   /// Onde o usuário está, quando o sistema (ou o IP) responde. Nulo enquanto a
   /// consulta não voltou — a tela abre sem o ponto e ele entra quando chega,
   /// sem prender a abertura do app.
@@ -129,6 +163,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     super.initState();
     unawaited(_refreshLocation());
     unawaited(_loadCities());
+    unawaited(_restoreKeepAwake());
     // Keep the day/night boundary moving: refresh the reference instant
     // every 5 minutes (the sun moves ~1,25° of longitude in that window —
     // about one cell of the 1° dot grid; the old 15-minute step was ~3,75°).
@@ -253,9 +288,74 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     setState(() => _location = location);
   }
 
+  /// Reaplica a escolha da execução anterior. Nada acontece quando não há
+  /// nenhuma guardada (o caminho normal) ou quando a tela foi montada sem
+  /// [WorldMapScreen.keepAwake].
+  Future<void> _restoreKeepAwake() async {
+    final keepAwake = widget.keepAwake;
+    if (keepAwake == null) {
+      return;
+    }
+    final bool saved;
+    try {
+      saved = await keepAwake.savedChoice();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[tela] falha ao ler a escolha guardada: $error');
+      }
+      return;
+    }
+    if (!mounted || !saved) {
+      return;
+    }
+    await _setKeepScreenOn(true);
+  }
+
+  /// Liga/desliga a tela acesa: publica o estado, pede ao nativo e, se o pedido
+  /// falhar, VOLTA a caixinha ao estado que o nativo de fato tem e mostra o
+  /// motivo no menu. Uma caixinha que fica marcada apesar da falha seria pior
+  /// que a ausência da opção.
+  Future<void> _setKeepScreenOn(bool enabled) async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _keepScreenOn = enabled;
+      _keepAwakeNotice = null;
+    });
+    final keepAwake = widget.keepAwake;
+    if (keepAwake == null) {
+      return;
+    }
+    try {
+      await keepAwake.setEnabled(enabled);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[tela] não deu para ${enabled ? 'segurar' : 'liberar'} a tela: '
+          '$error',
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _keepScreenOn = !enabled;
+        _keepAwakeNotice = enabled
+            ? 'não deu para manter a tela ligada'
+            : 'não deu para liberar a tela';
+      });
+    }
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
+    // A assertion da tela NÃO é liberada aqui de propósito: com o app fechando,
+    // o processo sai e o próprio macOS derruba a assertion junto, e liberar no
+    // `dispose` apagaria o estado do widget num simples remonte (o teste que
+    // troca a tela por um `SizedBox` veria a opção "desligar" sozinha). A
+    // escolha guardada continua no disco para a próxima abertura.
     super.dispose();
   }
 
@@ -366,6 +466,14 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                 includeTwilight: _includeTwilight,
                 onTwilightChanged: (value) =>
                     setState(() => _includeTwilight = value),
+                keepScreenOn: _keepScreenOn,
+                // Sem `KeepAwake` injetado a linha nem aparece no menu (ver
+                // `SettingsMenu.onKeepScreenOnChanged`): a opção só existe
+                // quando há quem segure a tela.
+                onKeepScreenOnChanged: widget.keepAwake == null
+                    ? null
+                    : _setKeepScreenOn,
+                keepAwakeNotice: _keepAwakeNotice,
                 locationNotice: _location?.notice,
                 cities: _catalog,
                 savedCityIds: {for (final clock in _cities) clock.city.id},
