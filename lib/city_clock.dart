@@ -61,8 +61,22 @@ class ClockReading {
 
   /// A leitura do relógio de [clock] no instante [now], comparando com o dia
   /// de [here] (o relógio do usuário) para o [dayOffset].
-  factory ClockReading.at(CityClock clock, DateTime now, {required DateTime here}) {
-    final there = clock.wallClock(now);
+  factory ClockReading.at(
+    CityClock clock,
+    DateTime now, {
+    required DateTime here,
+  }) => ClockReading.forLocation(clock.location, now, here: here);
+
+  /// A leitura de um fuso qualquer — não só o de uma cidade salva.
+  ///
+  /// É o que o ponto CLICADO usa: ele tem um `tz.Location` (do polígono, da
+  /// faixa náutica) e mais nada, e a hora dele é a mesma conta.
+  factory ClockReading.forLocation(
+    tz.Location location,
+    DateTime now, {
+    required DateTime here,
+  }) {
+    final there = tz.TZDateTime.from(now, location);
     return ClockReading(
       time: formatHourMinute(there),
       dayOffset: formatDayOffset(there, here),

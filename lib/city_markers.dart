@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'city.dart';
 import 'city_clock.dart';
+import 'clicked_point.dart';
 import 'map_overlay.dart';
 import 'panel_card.dart';
+import 'place_lookup.dart';
 import 'world_dot_map.dart';
 
 /// Os pontos das cidades salvas no mapa, com o overlay do relógio.
@@ -29,6 +31,7 @@ class CityMarkers extends StatelessWidget {
     this.selectedId,
     this.pinnedIds = const <String>{},
     this.onSelect,
+    this.clickedPoint,
   });
 
   /// As cidades a desenhar, com o fuso de cada uma já resolvido.
@@ -59,6 +62,14 @@ class CityMarkers extends StatelessWidget {
   /// Chamado com o id da cidade quando o disco dela é clicado. Nulo desliga o
   /// clique (os testes de desenho montam sem ele).
   final ValueChanged<String>? onSelect;
+
+  /// O ponto que o usuário clicou no mapa, quando há um.
+  ///
+  /// É um marcador DIFERENTE das cidades: ele não está salvo em lugar nenhum, o
+  /// nome pode não existir e a posição vem do clique, não do catálogo. Por isso
+  /// o desenho dele é outro (um alvo) e o cartão diz o que se sabe — inclusive
+  /// quando não se sabe o nome.
+  final ClickedPoint? clickedPoint;
 
   /// Cor de TERRA do tema em uso: o anel de cada cidade acompanha o tema em vez
   /// de introduzir uma cor que o tema não tem.
@@ -99,7 +110,8 @@ class CityMarkers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (cities.isEmpty) {
+    final clicked = clickedPoint;
+    if (cities.isEmpty && clicked == null) {
       return const SizedBox.shrink();
     }
 
@@ -114,6 +126,16 @@ class CityMarkers extends StatelessWidget {
       discs.add(_disc(clock, center));
       if (_isOpen(clock.city)) {
         overlays.add(_overlay(clock, center));
+      }
+    }
+
+    if (clicked != null) {
+      final center = clicked.point.offsetIn(mapSize);
+      discs.add(_clickedDisc(clicked, center));
+      // Sem resposta ainda, só o alvo: o cartão entra quando houver o que dizer.
+      // Mostrar um cartão vazio por um quadro piscaria à toa.
+      if (clicked.isResolved) {
+        overlays.add(_clickedOverlay(clicked, center));
       }
     }
 
@@ -240,6 +262,194 @@ class CityMarkers extends StatelessWidget {
       ),
     );
   }
+  /// O alvo do ponto clicado.
+  ///
+  /// `IgnorePointer`: ele é informação, não um controle. Um clique em cima dele
+  /// atravessa e recai no mapa, que resolve o mesmo ponto outra vez —
+  /// inofensivo, e mais previsível do que um alvo que engole o clique.
+  Widget _clickedDisc(ClickedPoint clicked, Offset center) {
+    final place = clicked.place;
+    return Positioned(
+      left: center.dx - hitSize / 2,
+      top: center.dy - hitSize / 2,
+      child: IgnorePointer(
+        child: Semantics(
+          label: place == null
+              ? 'Ponto consultado no mapa'
+              : '${place.label}: '
+                    '${ClockReading.forLocation(place.location, now, here: here).time}',
+          child: SizedBox.square(
+            dimension: hitSize,
+            child: Center(
+              child: SizedBox.square(
+                dimension: diameter,
+                child: CustomPaint(painter: _ClickedPointPainter(land: land)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// O cartão do ponto clicado: o que se sabe do lugar, e a hora.
+  Widget _clickedOverlay(ClickedPoint clicked, Offset center) {
+    final place = clicked.place!;
+    final reading = ClockReading.forLocation(place.location, now, here: here);
+    final title = place.name == null
+        ? place.label
+        : (place.approximate ? '≈ ${place.name}' : place.name!);
+    final detail = _detailOf(place);
+
+    return MapOverlayAnchor.forMarker(
+      center: center,
+      radius: diameter / 2,
+      mapSize: mapSize,
+      gap: gap,
+    ).wrap(
+      PanelCard(
+        background: background,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 13, color: PanelCard.textColor),
+                ),
+                if (detail != null)
+                  Text(
+                    detail,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: PanelCard.dimTextColor,
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      reading.time,
+                      style: TextStyle(
+                        fontSize: 22,
+                        color: PanelCard.textColor,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    if (reading.dayOffset.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        reading.dayOffset,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: PanelCard.dimTextColor,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Text(
+                  reading.offset,
+                  style: TextStyle(fontSize: 11, color: PanelCard.dimTextColor),
+                ),
+                // Só quando NÃO há nome: aí o motivo explica a ausência, em vez
+                // de deixar o cartão sem título e sem explicação.
+                if (place.notice case final notice? when place.name == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      notice,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: PanelCard.dimTextColor,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A linha de baixo do título de um ponto clicado: o país e, quando o nome é o
+/// da cidade mais próxima, a que distância ela está.
+///
+/// A ressalva não é enfeite: "≈ Djanet · a 181 km" é a diferença entre informar
+/// e enganar quem clicou no meio do Saara.
+String? _detailOf(PlaceInfo place) {
+  final country = place.country;
+  final parts = <String>[
+    if (country != null && country.isNotEmpty) country,
+    if (place.approximate && place.distanceKm != null)
+      'a ${place.distanceKm!.round()} km',
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// O alvo do ponto consultado: um anel com um ponto no meio.
+///
+/// A forma separa os quatro marcadores do mapa de relance: o ponto do usuário e
+/// a Lua são discos CHEIOS, a cidade é um anel VAZADO e o ponto consultado é um
+/// alvo (anel com miolo).
+class _ClickedPointPainter extends CustomPainter {
+  const _ClickedPointPainter({required this.land});
+
+  final Color land;
+
+  /// Largura do anel claro externo, em pontos.
+  static const double haloWidth = 1.4;
+
+  /// Largura do anel do tema, em pontos.
+  static const double ringWidth = 1.6;
+
+  /// Raio do miolo, em pontos.
+  static const double dotRadius = 1.6;
+
+  static final Color _halo = Colors.white.withValues(alpha: 0.92);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final paint = Paint()..isAntiAlias = true;
+
+    canvas.drawCircle(
+      center,
+      radius - haloWidth / 2,
+      paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = haloWidth
+        ..color = _halo,
+    );
+    canvas.drawCircle(
+      center,
+      radius - haloWidth - ringWidth / 2,
+      paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = ringWidth
+        ..color = land,
+    );
+    canvas.drawCircle(
+      center,
+      dotRadius,
+      paint
+        ..style = PaintingStyle.fill
+        ..color = _halo,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClickedPointPainter oldDelegate) =>
+      oldDelegate.land != land;
 }
 
 /// O disco de uma cidade: um ANEL, não um disco cheio.

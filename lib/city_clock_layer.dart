@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'city_clock.dart';
+import 'clicked_point.dart';
 import 'city_markers.dart';
 
 /// A camada das cidades: segura o instante e o ticker do relógio.
@@ -26,6 +27,7 @@ class CityClockLayer extends StatefulWidget {
     this.selectedId,
     this.pinnedIds = const <String>{},
     this.onSelect,
+    this.clickedPoint,
     this.clock = DateTime.now,
   });
 
@@ -46,6 +48,11 @@ class CityClockLayer extends StatefulWidget {
 
   /// Chamado com o id da cidade quando o disco dela é clicado.
   final ValueChanged<String>? onSelect;
+
+  /// O ponto consultado no mapa (ver [ClickedPoint]), quando há um. A camada só
+  /// o repassa: quem resolve o ponto é a tela, que tem o resolver e a geração do
+  /// clique.
+  final ClickedPoint? clickedPoint;
 
   /// De onde vem "agora". Injetável pelos mesmos motivos de
   /// `WorldDotMap(now:)`: um widget que lê o relógio do sistema por conta
@@ -127,6 +134,7 @@ class _CityClockLayerState extends State<CityClockLayer> {
       selectedId: widget.selectedId,
       pinnedIds: widget.pinnedIds,
       onSelect: widget.onSelect,
+      clickedPoint: widget.clickedPoint,
     );
   }
 }

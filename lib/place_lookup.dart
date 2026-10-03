@@ -70,13 +70,34 @@ class PlaceInfo {
   /// houve o que falhar. O TEMPO nunca depende disso.
   final String? notice;
 
-  PlaceInfo withName({
-    required String name,
-    String? country,
-    bool approximate = false,
-    double? distanceKm,
-    String? notice,
-  }) => PlaceInfo(
+  /// O rótulo do lugar: o nome quando há, e uma descrição HONESTA quando não há.
+  ///
+  /// "Mar aberto" e "sem cidade por perto" são a verdade, e são melhores do que
+  /// um nome de vizinho a 400 km ou um identificador interno como `Etc/GMT+2`.
+  /// A distinção sai do próprio fuso: as zonas `Etc/*` são as faixas náuticas,
+  /// que só existem onde não há terra com zona política.
+  String get label {
+    if (name != null) {
+      return name!;
+    }
+    return location.name.startsWith('Etc/')
+        ? 'Mar aberto'
+        : 'Sem cidade por perto';
+  }
+
+  /// A mesma informação, com o nome exato que uma fonte de nomes devolveu.
+  ///
+  /// Zera [distanceKm] e [approximate]: o nome deixou de ser "a cidade mais
+  /// próxima" e passou a ser o lugar do clique.
+  PlaceInfo withExactName(PlaceName name) => PlaceInfo(
+    point: point,
+    location: location,
+    name: name.locality,
+    country: name.country,
+  );
+
+  /// A mesma informação, com o motivo de um nome exato não ter vindo.
+  PlaceInfo withNotice(String notice) => PlaceInfo(
     point: point,
     location: location,
     name: name,
@@ -306,57 +327,6 @@ class BigDataCloudNameLookup implements PlaceNameLookup {
 
   static String _text(Object? value) =>
       value is String ? value.trim() : '';
-}
-
-/// O lookup que a tela usa: o offline resolve sempre, e a fonte de nome (rede,
-/// quando injetada) só MELHORA o nome.
-///
-/// A reserva só entra quando o offline não deu nome ou deu um aproximado: pedir
-/// a rede para confirmar um nome que já é o lugar do clique seria uma requisição
-/// por clique, sem ganho nenhum.
-class LayeredPlaceLookup implements PlaceLookup {
-  const LayeredPlaceLookup({required this.offline, this.nameLookup});
-
-  final OfflinePlaceLookup offline;
-
-  /// A fonte de nomes exatos. Nula (o padrão) desliga a rede por completo.
-  final PlaceNameLookup? nameLookup;
-
-  @override
-  Future<PlaceInfo> resolve(MapPoint point) async {
-    final base = await offline.resolve(point);
-    final lookup = nameLookup;
-    if (lookup == null || (base.name != null && !base.approximate)) {
-      return base;
-    }
-
-    final PlaceName? better;
-    try {
-      better = await lookup.lookup(point);
-    } catch (error) {
-      // A fonte de nome falhou: a hora continua valendo, e o nome do catálogo
-      // (aproximado) também. O motivo fica anotado para o overlay poder dizer
-      // por que não há um nome exato — falha silenciosa aqui viraria "o nome
-      // simplesmente não aparece".
-      return PlaceInfo(
-        point: base.point,
-        location: base.location,
-        name: base.name,
-        country: base.country,
-        distanceKm: base.distanceKm,
-        approximate: base.approximate,
-        notice: 'nome exato indisponível',
-      );
-    }
-    if (better == null) {
-      return base;
-    }
-    return base.withName(
-      name: better.locality,
-      country: better.country,
-      notice: null,
-    );
-  }
 }
 
 /// Distância em km entre dois pontos, pela fórmula do haversine.
