@@ -26,6 +26,30 @@ every 5 minutes.
 2. Right-click the desktop → **Edit Widgets…** → search **World Clock** →
    drag it to the desktop.
 
+## Saved cities
+
+Menu (top right) → **Cidades**: search the catalog in Portuguese, without
+needing the accents (`sao paulo`, `tokio`), and tap a row to put that city
+on the map or take it off. The eye on a saved city pins its clock.
+
+- A saved city is a **ring** on the map at its exact coordinate — not
+  snapped to the 1° dot grid, since a city is not a land dot (Fortaleza,
+  for one, falls on an *ocean* cell of the grid).
+- Clicking the ring opens a discreet card: city and country on top, the
+  local time below, with the UTC offset and `+1 dia` when the date over
+  there is not the date here. Clicking again closes it. Pinned cities keep
+  their card open with no clicking at all.
+- Times come from the IANA tzdb, so daylight saving is right by
+  construction: Sydney reads `UTC+11` in January and `UTC+10` in July, and
+  the 45- and 30-minute zones (Chatham, Kathmandu, St. John's) are not
+  rounded to the hour.
+- The clock ticks on the minute boundary and rebuilds only its own layer:
+  the map's tens of thousands of dots are never repainted by it (there are
+  tests asserting exactly that).
+- Only the catalog **ids** are persisted, via `shared_preferences`. An id
+  that disappears from the catalog after a regeneration is dropped
+  silently rather than blocking the app.
+
 ## City catalog
 
 `assets/cities.json` is generated, never hand-edited:
