@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
 
 import 'map_theme.dart';
 import 'moon_marker.dart';
@@ -12,6 +13,15 @@ import 'user_marker.dart';
 import 'world_dot_map.dart';
 
 void main() {
+  // A base de fusos (tzdb) tem de estar carregada antes do primeiro `CityClock`
+  // — e `CityClock` é construído assim que o catálogo de cidades chega, no
+  // primeiro quadro. Sem isto, `tz.getLocation` lança.
+  //
+  // `latest_all` e NÃO `latest`: é o `latest_all` que traz os identificadores
+  // de link (106 deles). O gerador do catálogo aceita qualquer id que exista na
+  // tzdb completa, então com `latest` uma cidade legítima derrubaria a abertura
+  // do app.
+  tzdata.initializeTimeZones();
   runApp(const WorldClockApp());
 }
 
