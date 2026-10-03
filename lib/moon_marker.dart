@@ -69,7 +69,10 @@ class MoonMarker extends StatefulWidget {
     return atan2(dy, dx);
   }
 
-  /// Distância entre o disco e o overlay, em pontos.
+  /// Folga entre a BORDA do disco e o painel, em pontos.
+  ///
+  /// O painel da Lua é grande, então pede mais ar que o rótulo de uma cidade:
+  /// 12 pt aqui, contra os 2 pt (negativos) do rótulo da cidade.
   static const double gap = 12;
 
   @override
