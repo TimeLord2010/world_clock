@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 
+import 'city.dart';
 import 'city_catalog.dart';
 import 'city_clock.dart';
 import 'city_clock_layer.dart';
@@ -117,6 +118,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// leitura do disco não volta (e continua vazio se não houver nada salvo).
   List<CityClock> _cities = const <CityClock>[];
 
+  /// O catálogo inteiro (7.341 lugares), que alimenta o painel de cidades.
+  ///
+  /// Fica na tela porque o painel precisa poder BUSCAR em qualquer cidade, e não
+  /// só nas salvas — sem ele, não haveria como adicionar a primeira.
+  List<City> _catalog = const <City>[];
+
   /// A cidade com o overlay aberto por clique — uma só por vez. O overlay
   /// "sempre visível" é outra coisa: vem de [_pinnedCityIds].
   String? _selectedCityId;
@@ -128,7 +135,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   void initState() {
     super.initState();
     unawaited(_refreshLocation());
-    unawaited(_restoreCities());
+    unawaited(_loadCities());
     // Keep the day/night boundary moving: refresh the reference instant
     // every 5 minutes (the sun moves ~1,25° of longitude in that window —
     // about one cell of the 1° dot grid; the old 15-minute step was ~3,75°).
@@ -151,23 +158,27 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
 
   /// Lê o catálogo e as cidades salvas, e publica as que ainda existem.
   ///
-  /// As três coisas são assíncronas (asset, disco, e o `tz.getLocation` de cada
+  /// O CATÁLOGO é lido mesmo sem persistência nenhuma: o painel de cidades
+  /// precisa dele para oferecer qualquer coisa, e sem isso não haveria como
+  /// adicionar a primeira cidade.
+  ///
+  /// As leituras são assíncronas (asset, disco, e o `tz.getLocation` de cada
   /// cidade), então a tela abre sem marcador nenhum e eles entram quando a
-  /// leitura volta — o mesmo contrato do ponto do usuário, que também não
-  /// prende a abertura.
-  Future<void> _restoreCities() async {
-    final store = widget.cityStore;
-    if (store == null) {
-      return;
-    }
+  /// leitura volta — o mesmo contrato do ponto do usuário, que também não prende
+  /// a abertura.
+  Future<void> _loadCities() async {
     try {
       final catalog = await CityCatalog.load();
-      final saved = await store.load();
+      final store = widget.cityStore;
+      final saved = store == null
+          ? const SavedCities()
+          : await store.load();
       final chosen = CityCatalog.byIds(catalog, saved.selected);
       if (!mounted) {
         return;
       }
       setState(() {
+        _catalog = catalog;
         _cities = [for (final city in chosen) CityClock(city)];
         // Ids de cidades que não existem mais no catálogo ficam no conjunto sem
         // efeito nenhum (só é consultado com `contains`), e o próximo `save`
@@ -179,7 +190,82 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       // catálogo ou o disco não pode impedir o app de abrir — mas também não
       // pode sumir sem deixar rastro.
       if (kDebugMode) {
-        debugPrint('[cidades] falha ao restaurar as cidades salvas: $error');
+        debugPrint('[cidades] falha ao carregar o catálogo/cidades: $error');
+      }
+    }
+  }
+
+  /// A cidade do catálogo com este id, ou nulo (id órfão).
+  City? _cityById(String id) {
+    for (final city in _catalog) {
+      if (city.id == id) {
+        return city;
+      }
+    }
+    return null;
+  }
+
+  /// Salva a cidade ou a retira do mapa.
+  void _toggleSavedCity(String id) {
+    final city = _cityById(id);
+    if (city == null) {
+      return;
+    }
+    final isSaved = _cities.any((clock) => clock.city.id == id);
+
+    setState(() {
+      if (isSaved) {
+        _cities = [
+          for (final clock in _cities)
+            if (clock.city.id != id) clock,
+        ];
+        // Retirar a cidade solta o pino: um "sempre visível" de uma cidade que
+        // não está mais no mapa não teria onde aparecer.
+        _pinnedCityIds = {..._pinnedCityIds}..remove(id);
+        if (_selectedCityId == id) {
+          _selectedCityId = null;
+        }
+      } else {
+        // Ordem por população, a mesma do catálogo: os marcadores não dançam
+        // conforme a ordem em que o usuário escolheu.
+        _cities = [..._cities, CityClock(city)]
+          ..sort(
+            (a, b) => b.city.population.compareTo(a.city.population),
+          );
+      }
+    });
+    unawaited(_persistCities());
+  }
+
+  /// Liga ou desliga o "horário sempre visível" de uma cidade.
+  void _togglePinnedCity(String id) {
+    setState(() {
+      final pinned = {..._pinnedCityIds};
+      if (!pinned.remove(id)) {
+        pinned.add(id);
+      }
+      _pinnedCityIds = pinned;
+    });
+    unawaited(_persistCities());
+  }
+
+  /// Grava a escolha atual. Falha não impede nada: o estado da sessão continua
+  /// valendo, só não sobrevive ao fechamento.
+  Future<void> _persistCities() async {
+    final store = widget.cityStore;
+    if (store == null) {
+      return;
+    }
+    try {
+      await store.save(
+        SavedCities(
+          selected: {for (final clock in _cities) clock.city.id},
+          pinned: _pinnedCityIds,
+        ),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[cidades] falha ao gravar as cidades salvas: $error');
       }
     }
   }
@@ -326,6 +412,11 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                 onTwilightChanged: (value) =>
                     setState(() => _includeTwilight = value),
                 locationNotice: _location?.notice,
+                cities: _catalog,
+                savedCityIds: {for (final clock in _cities) clock.city.id},
+                pinnedCityIds: _pinnedCityIds,
+                onCityToggled: _toggleSavedCity,
+                onCityPinToggled: _togglePinnedCity,
               ),
             ),
           ],

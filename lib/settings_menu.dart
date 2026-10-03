@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'city.dart';
+import 'city_picker.dart';
 import 'map_theme.dart';
 import 'panel_card.dart';
 
@@ -10,11 +12,12 @@ import 'panel_card.dart';
 /// Ocupa a tela inteira para poder desenhar a barreira que fecha o menu (um
 /// clique fora dele), mas só o ícone no canto e os painéis que abre recebem
 /// clique. A bandeja tem a opção "Tema" — que abre o submenu com os temas
-/// disponíveis — a opção "Incluir crepúsculo" (uma caixinha que liga/desliga a
-/// espera pelo crepúsculo no mapa, ver [WorldDotMap.includeTwilight]) e,
-/// quando não há posição do usuário, uma LINHA DE MOTIVO (ver
-/// [locationNotice]). Os dados da Lua NÃO moram aqui: eles aparecem no overlay
-/// que abre com o ponteiro em cima do marcador no mapa (`MoonMarker`).
+/// disponíveis —, a opção "Incluir crepúsculo" (uma caixinha que liga/desliga a
+/// espera pelo crepúsculo no mapa, ver [WorldDotMap.includeTwilight]), a opção
+/// "Cidades" (que abre o [CityPicker]) e, quando não há posição do usuário, uma
+/// LINHA DE MOTIVO (ver [locationNotice]). Os dados da Lua NÃO moram aqui: eles
+/// aparecem no overlay que abre com o ponteiro em cima do marcador no mapa
+/// (`MoonMarker`).
 ///
 /// **Só clique abre**: o menu não reage a hover. Hover aqui era um tiro no pé —
 /// cada movimento do ponteiro virava um `setState`, e como o mapa é irmão da
@@ -31,6 +34,11 @@ class SettingsMenu extends StatefulWidget {
     required this.onTwilightChanged,
     this.themes = MapThemes.all,
     this.locationNotice,
+    this.cities = const <City>[],
+    this.savedCityIds = const <String>{},
+    this.pinnedCityIds = const <String>{},
+    this.onCityToggled,
+    this.onCityPinToggled,
   });
 
   /// Tema em uso hoje: marca a opção selecionada e aparece no item "Tema".
@@ -57,6 +65,24 @@ class SettingsMenu extends StatefulWidget {
   /// sem cursor de mão.
   final String? locationNotice;
 
+  /// O catálogo de cidades que o painel "Cidades" oferece. Vazio enquanto ele
+  /// não chegou (o painel mostra "Carregando o catálogo…").
+  final List<City> cities;
+
+  /// Ids das cidades salvas hoje — a bandeja mostra a contagem na linha.
+  final Set<String> savedCityIds;
+
+  /// Ids das cidades com o horário sempre visível.
+  final Set<String> pinnedCityIds;
+
+  /// Chamado com o id da cidade quando ela deve ser salva ou retirada. Nulo
+  /// (o padrão) desliga a ação — os testes que só olham o menu não precisam
+  /// saber de cidades.
+  final ValueChanged<String>? onCityToggled;
+
+  /// Chamado com o id da cidade quando o "sempre visível" dela vira.
+  final ValueChanged<String>? onCityPinToggled;
+
   @override
   State<SettingsMenu> createState() => _SettingsMenuState();
 }
@@ -68,9 +94,17 @@ class _SettingsMenuState extends State<SettingsMenu> {
   /// Submenu de "Tema" visível.
   bool _themeSubmenu = false;
 
+  /// Painel de "Cidades" visível.
+  ///
+  /// Ele SUBSTITUI o painel de opções em vez de abrir ao lado (como o submenu
+  /// de tema faz): são 300 pt de painel, e manter as opções ao lado empurraria
+  /// os dois para fora da janela numa janela estreita.
+  bool _citiesPanel = false;
+
   void _toggleMenu() => setState(() {
     _open = !_open;
     _themeSubmenu = false;
+    _citiesPanel = false;
   });
 
   void _closeAll() {
@@ -80,10 +114,22 @@ class _SettingsMenuState extends State<SettingsMenu> {
     setState(() {
       _open = false;
       _themeSubmenu = false;
+      _citiesPanel = false;
     });
   }
 
-  void _toggleSubmenu() => setState(() => _themeSubmenu = !_themeSubmenu);
+  void _toggleSubmenu() => setState(() {
+    _themeSubmenu = !_themeSubmenu;
+    _citiesPanel = false;
+  });
+
+  void _toggleCitiesPanel() => setState(() {
+    _citiesPanel = !_citiesPanel;
+    _themeSubmenu = false;
+  });
+
+  /// Volta do painel de cidades para o de opções, sem fechar o menu.
+  void _leaveCitiesPanel() => setState(() => _citiesPanel = false);
 
   void _pick(MapTheme theme) {
     widget.onThemeSelected(theme);
@@ -122,10 +168,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
                       padding: const EdgeInsets.only(top: 14, right: 8),
                       child: _themePanel(),
                     ),
-                  if (_open)
+                  if (_open && !_citiesPanel)
                     Padding(
                       padding: const EdgeInsets.only(top: 8, right: 8),
                       child: _optionsPanel(),
+                    ),
+                  if (_open && _citiesPanel)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, right: 8),
+                      child: _citiesPanelWidget(),
                     ),
                   _menuButton(),
                 ],
@@ -162,9 +213,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
   }
 
   /// Menu de primeiro nível: a opção "Tema" (paletas), a caixinha "Incluir
-  /// crepúsculo" e, quando a posição do usuário não veio, a linha com o
-  /// motivo. Os dados da Lua não entram aqui — eles moram no overlay do
-  /// marcador, no mapa.
+  /// crepúsculo", a opção "Cidades" (com a contagem de salvas) e, quando a
+  /// posição do usuário não veio, a linha com o motivo. Os dados da Lua não
+  /// entram aqui — eles moram no overlay do marcador, no mapa.
   Widget _optionsPanel() {
     return PanelCard(
       background: widget.theme.background,
@@ -231,6 +282,41 @@ class _SettingsMenuState extends State<SettingsMenu> {
             ],
           ),
         ),
+        _row(
+          onTap: _toggleCitiesPanel,
+          highlighted: _citiesPanel,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.public, size: 16, color: PanelCard.textColor),
+              const SizedBox(width: 10),
+              Text(
+                'Cidades',
+                style: TextStyle(fontSize: 13, color: PanelCard.textColor),
+              ),
+              const SizedBox(width: 24),
+              // Contador: diz quantas cidades estão salvas sem precisar abrir o
+              // painel. Mesma coluna à direita das outras linhas (o rabo do
+              // "Tema" e a caixinha do crepúsculo têm 36 pt), para os controles
+              // ficarem alinhados.
+              SizedBox(
+                width: 36,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${widget.savedCityIds.length}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: widget.savedCityIds.isEmpty
+                          ? PanelCard.dimTextColor
+                          : PanelCard.textColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         if (widget.locationNotice case final notice?)
           Padding(
             // Mesmo recuo horizontal dos itens, sem o vertical de linha
@@ -253,6 +339,23 @@ class _SettingsMenuState extends State<SettingsMenu> {
             ),
           ),
       ],
+    );
+  }
+
+  /// O painel de "Cidades": busca, salva/retira e fixa o horário.
+  ///
+  /// Os callbacks são repassados como opcionais porque a bandeja pode ser
+  /// montada sem eles (os testes de tema e de crepúsculo não têm cidades): sem
+  /// handler, clicar na linha simplesmente não faz nada, em vez de estourar.
+  Widget _citiesPanelWidget() {
+    return CityPicker(
+      cities: widget.cities,
+      savedIds: widget.savedCityIds,
+      pinnedIds: widget.pinnedCityIds,
+      onToggleSaved: (id) => widget.onCityToggled?.call(id),
+      onTogglePinned: (id) => widget.onCityPinToggled?.call(id),
+      onBack: _leaveCitiesPanel,
+      background: widget.theme.background,
     );
   }
 
