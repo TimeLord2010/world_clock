@@ -64,15 +64,18 @@ void main() {
     });
   });
 
-  test('o afastamento horizontal desconta o raio; o vertical conta do centro', () {
-    // A assimetria é a da Lua desde sempre: mexer nela mudaria a posição de um
-    // painel já validado (e o teste "o overlay nunca cobre o disco" é quem
-    // garante que ela não encosta no marcador).
-    final anchor = anchorAt(300, 200);
+  test(
+    'o afastamento horizontal desconta o raio; o vertical conta do centro',
+    () {
+      // A assimetria é a da Lua desde sempre: mexer nela mudaria a posição de um
+      // painel já validado (e o teste "o overlay nunca cobre o disco" é quem
+      // garante que ela não encosta no marcador).
+      final anchor = anchorAt(300, 200);
 
-    expect(anchor.left, 300 + radius + gap);
-    expect(anchor.top, 200 + gap);
-  });
+      expect(anchor.left, 300 + radius + gap);
+      expect(anchor.top, 200 + gap);
+    },
+  );
 
   test('os quatro cantos escolhem os lados de fora', () {
     final topLeft = anchorAt(0, 0);
