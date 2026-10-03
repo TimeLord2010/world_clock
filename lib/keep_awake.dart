@@ -1,18 +1,21 @@
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Quem impede a TELA de dormir enquanto o relógio está à vista.
 ///
 /// O macOS apaga o monitor por ociosidade do **usuário**, não do app: o mapa
 /// pode estar redesenhando a cada 5 minutos e mesmo assim o monitor apaga. Quem
-/// segura a tela acesa é uma *power assertion* do IOKit, e o Dart não alcança o
-/// IOKit — o lado nativo do app cria e libera a assertion (ver
-/// `macos/Runner/AppDelegate.swift`), e esta interface é a ponte.
+/// segura a tela acesa é uma *power assertion* do sistema — no macOS, uma
+/// assertion do IOKit —, e quem cria e libera isso é o `wakelock_plus`: um
+/// pacote com implementação para **cada plataforma** (Android, iOS, macOS,
+/// Windows, Linux e web). É de propósito NÃO escrever esse código nativo aqui no
+/// projeto: uma opção do app tem de atravessar o port para Android sem exigir
+/// código nativo novo para manter.
 ///
 /// A escolha é do usuário e **sobrevive ao fechamento do app**: é uma opção que
 /// ele liga uma vez e espera encontrar ligada na próxima abertura, por isso
 /// [setEnabled] grava além de aplicar. Só grava o que de fato entrou em vigor —
-/// uma assertion que falhou **não** vira uma preferência que o app tentaria
+/// um pedido que falhou **não** vira uma preferência que o app tentaria
 /// reaplicar (e falhar de novo) a cada abertura.
 abstract interface class KeepAwake {
   /// A escolha guardada da execução anterior — falso quando não há nenhuma.
@@ -22,7 +25,7 @@ abstract interface class KeepAwake {
   Future<void> setEnabled(bool enabled);
 }
 
-/// Implementação de verdade: canal de plataforma + `shared_preferences`.
+/// Implementação de verdade: `wakelock_plus` + `shared_preferences`.
 ///
 /// **Não é o default da tela**, e nem poderia: é plugin nativo, e num teste de
 /// widget sem preparo derruba o teste com `MissingPluginException` (mesma
@@ -30,12 +33,13 @@ abstract interface class KeepAwake {
 /// monta o app de verdade (`main`) passa este; os testes passam
 /// [MemoryKeepAwake] — ou nada, e aí a opção nem aparece no menu.
 class SystemKeepAwake implements KeepAwake {
-  const SystemKeepAwake();
+  const SystemKeepAwake({this.toggle = WakelockPlus.toggle});
 
-  /// O canal que o `AppDelegate` atende. O método é `setEnabled` e o argumento
-  /// é o bool direto (`invokeMethod`), não um mapa — o contrato é este e o
-  /// teste `test/keep_awake_test.dart` o trava dos dois lados do canal.
-  static const MethodChannel channel = MethodChannel('world_clock/keep_awake');
+  /// O pedido em si: o `WakelockPlus` (o mesmo em toda plataforma que o pacote
+  /// atende). Injetável pelo mesmo motivo dos outros colaboradores da tela — o
+  /// `flutter test` não tem plugin nativo registrado, então o teste troca por
+  /// uma função de mentira e verifica o que ESTE arquivo faz: pedir e guardar.
+  final Future<void> Function({required bool enable}) toggle;
 
   /// Chave da escolha no `NSUserDefaults` (o `shared_preferences` prefixa com
   /// `flutter.` no macOS). Prefixada como as chaves de cidade: o
@@ -51,10 +55,10 @@ class SystemKeepAwake implements KeepAwake {
 
   @override
   Future<void> setEnabled(bool enabled) async {
-    // Aplicar ANTES de gravar: uma assertion negada tem de subir como erro para
-    // a tela poder voltar a caixinha e dizer o motivo, em vez de deixar no disco
-    // uma escolha que não está valendo.
-    await channel.invokeMethod<void>('setEnabled', enabled);
+    // Aplicar ANTES de gravar: um pedido recusado pela plataforma tem de subir
+    // como erro para a tela poder voltar a caixinha e dizer o motivo, em vez de
+    // deixar no disco uma escolha que não está valendo.
+    await toggle(enable: enabled);
     final preferences = await SharedPreferences.getInstance();
     await preferences.setBool(enabledKey, enabled);
   }

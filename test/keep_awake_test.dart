@@ -15,73 +15,66 @@ Future<UserLocation> noLocation() async =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('SystemKeepAwake (o lado Dart do canal)', () {
-    late List<MethodCall> calls;
+  group('SystemKeepAwake (o pedido ao `wakelock_plus`)', () {
+    late List<bool> toggles;
 
-    /// Troca o lado nativo por um espião. O canal, o nome do método e a forma
-    /// do argumento são CONTRATO: quem atende do outro lado é o
-    /// `AppDelegate.swift` do macOS, que não tem teste rodável daqui — se
-    /// alguém renomear um dos dois, é aqui que quebra.
-    void listen({Object? Function(MethodCall call)? answer}) {
-      calls = <MethodCall>[];
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemKeepAwake.channel, (call) async {
-            calls.add(call);
-            return answer?.call(call);
-          });
-    }
+    /// O lado do `wakelock_plus` de mentira: ele existe para o teste não
+    /// depender de plugin nativo registrado (que não existe no `flutter test`)
+    /// e para poder RECUSAR o pedido, que é o caso da plataforma negando.
+    SystemKeepAwake keepAwake({Object? failure}) => SystemKeepAwake(
+      toggle: ({required bool enable}) async {
+        if (failure != null) {
+          throw failure;
+        }
+        toggles.add(enable);
+      },
+    );
 
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
-      listen();
+      toggles = <bool>[];
     });
 
-    tearDown(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemKeepAwake.channel, null);
-    });
+    test('ligar pede o wakelock ligado e guarda a escolha', () async {
+      await keepAwake().setEnabled(true);
 
-    test('ligar pede setEnabled(true) no canal e guarda a escolha', () async {
-      await const SystemKeepAwake().setEnabled(true);
-
-      expect(calls, hasLength(1));
-      expect(calls.single.method, 'setEnabled');
-      expect(calls.single.arguments, isTrue);
+      expect(toggles, [true]);
 
       // Guardada: é isso que faz a opção voltar ligada na próxima abertura —
-      // em vez de o usuário ter de ligá-la de novo toda vez.
-      expect(await const SystemKeepAwake().savedChoice(), isTrue);
+      // em vez de o usuário ter de ligá-la de novo toda vez. O `toggle` é o
+      // `WakelockPlus`, o MESMO em Android, iOS, macOS, Windows, Linux e web:
+      // nenhum código nativo deste projeto entra no caminho.
+      expect(await keepAwake().savedChoice(), isTrue);
     });
 
-    test('desligar pede setEnabled(false) e guarda o desligado', () async {
-      await const SystemKeepAwake().setEnabled(false);
+    test('desligar pede o wakelock desligado e guarda o desligado', () async {
+      await keepAwake().setEnabled(false);
 
-      expect(calls.single.arguments, isFalse);
-      expect(await const SystemKeepAwake().savedChoice(), isFalse);
+      expect(toggles, [false]);
+      expect(await keepAwake().savedChoice(), isFalse);
     });
 
     test(
       'sem escolha guardada, a leitura é desligada (e não um erro)',
       () async {
-        expect(await const SystemKeepAwake().savedChoice(), isFalse);
+        expect(await keepAwake().savedChoice(), isFalse);
+        expect(toggles, isEmpty);
       },
     );
 
     test(
-      'assertion recusada pelo nativo: o erro sobe e NADA é gravado',
+      'pedido recusado pela plataforma: o erro sobe e NADA é gravado',
       () async {
-        listen(
-          answer: (_) => throw PlatformException(code: 'assertion_failed'),
-        );
-
         await expectLater(
-          const SystemKeepAwake().setEnabled(true),
+          keepAwake(
+            failure: PlatformException(code: 'assertion_failed'),
+          ).setEnabled(true),
           throwsA(isA<PlatformException>()),
         );
 
         // Gravar uma escolha que não entrou em vigor faria o app tentar
         // reaplicá-la (e falhar de novo, agora em silêncio) a cada abertura.
-        expect(await const SystemKeepAwake().savedChoice(), isFalse);
+        expect(await keepAwake().savedChoice(), isFalse);
       },
     );
   });
