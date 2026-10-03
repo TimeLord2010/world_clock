@@ -4,39 +4,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// O que o usuário escolheu e precisa sobreviver ao fechamento do app.
 @immutable
 class SavedCities {
-  const SavedCities({
-    this.selected = const <String>{},
-    this.pinned = const <String>{},
-  });
+  const SavedCities({this.selected = const <String>{}});
 
-  /// Ids das cidades salvas (aparecem como ponto no mapa).
+  /// Ids das cidades salvas (aparecem como ponto e com o horário no mapa).
   final Set<String> selected;
 
-  /// Ids das cidades com o horário sempre visível, sem depender de clique.
-  /// Subconjunto de [selected] na prática, mas não é imposto aqui.
-  final Set<String> pinned;
-
-  SavedCities copyWith({Set<String>? selected, Set<String>? pinned}) =>
-      SavedCities(
-        selected: selected ?? this.selected,
-        pinned: pinned ?? this.pinned,
-      );
+  SavedCities copyWith({Set<String>? selected}) =>
+      SavedCities(selected: selected ?? this.selected);
 
   @override
   bool operator ==(Object other) =>
-      other is SavedCities &&
-      setEquals(other.selected, selected) &&
-      setEquals(other.pinned, pinned);
+      other is SavedCities && setEquals(other.selected, selected);
 
   @override
-  int get hashCode => Object.hash(
-    Object.hashAllUnordered(selected),
-    Object.hashAllUnordered(pinned),
-  );
+  int get hashCode => Object.hashAllUnordered(selected);
 
   @override
-  String toString() =>
-      'SavedCities(selected: $selected, pinned: $pinned)';
+  String toString() => 'SavedCities(selected: $selected)';
 }
 
 /// Onde a escolha do usuário fica entre execuções.
@@ -65,18 +49,15 @@ abstract interface class CityStore {
 class SharedPreferencesCityStore implements CityStore {
   const SharedPreferencesCityStore();
 
-  /// Nomes das chaves. Prefixadas porque o `NSUserDefaults` é compartilhado com
+  /// Nome da chave. Prefixada porque o `NSUserDefaults` é compartilhado com
   /// qualquer outra coisa que o app venha a guardar.
   static const String selectedKey = 'cities.selected';
-  static const String pinnedKey = 'cities.pinned';
 
   @override
   Future<SavedCities> load() async {
     final preferences = await SharedPreferences.getInstance();
     return SavedCities(
       selected: (preferences.getStringList(selectedKey) ?? const <String>[])
-          .toSet(),
-      pinned: (preferences.getStringList(pinnedKey) ?? const <String>[])
           .toSet(),
     );
   }
@@ -85,7 +66,6 @@ class SharedPreferencesCityStore implements CityStore {
   Future<void> save(SavedCities cities) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setStringList(selectedKey, cities.selected.toList());
-    await preferences.setStringList(pinnedKey, cities.pinned.toList());
   }
 }
 

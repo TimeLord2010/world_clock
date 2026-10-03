@@ -101,21 +101,6 @@ class WorldDotMap extends StatefulWidget {
   static Offset normalize(double lonDeg, double latDeg) =>
       Offset((lonDeg + 180) / 360, (90 - latDeg) / 180);
 
-  /// The geographic point of a normalized position (unit square) — the exact
-  /// inverse of [normalize].
-  ///
-  /// Returns `Offset(longitude, latitude)` in degrees, clamped to the world:
-  /// a click a fraction of a point outside the map's edge must not produce a
-  /// coordinate like lon 180.03 that no data source has ever heard of.
-  ///
-  /// Lives next to [normalize] on purpose: they are one projection, and a
-  /// change to either that is not mirrored in the other is a bug that shows up
-  /// as a marker in the wrong place rather than as a crash.
-  static Offset unproject(Offset unit) => Offset(
-    (unit.dx * 360 - 180).clamp(-180.0, 180.0),
-    (90 - unit.dy * 180).clamp(-90.0, 90.0),
-  );
-
   /// The ocean dots: every cell center of the full grid that is NOT one of
   /// the [landGeo] dots — i.e. everything that is not a piece of land.
   ///

@@ -10,9 +10,8 @@ every 5 minutes.
   adaptive decimation so dots stay well separated on small windows.
 - Saved cities (`lib/city_*.dart`): a searchable catalog
   (`assets/cities.json`) whose time zones are resolved **offline** from the
-  IANA tzdb, so each saved city gets a clickable dot on the map with a
-  discreet overlay (city, country, local time) and an "always visible"
-  toggle.
+  IANA tzdb, so each saved city gets a dot on the map with its name and
+  local time always in view.
 - macOS widget (`macos/WorldClockWidget/`): WidgetKit extension that
   renders the same map natively (Swift port of the shading and renderer,
   parity-checked against the Dart code). Fully autonomous: the dot
@@ -30,15 +29,19 @@ every 5 minutes.
 
 Menu (top right) → **Cidades**: search the catalog in Portuguese, without
 needing the accents (`sao paulo`, `tokio`), and tap a row to put that city
-on the map or take it off. The eye on a saved city pins its clock.
+on the map or take it off.
 
-- A saved city is a **ring** on the map at its exact coordinate — not
-  snapped to the 1° dot grid, since a city is not a land dot (Fortaleza,
-  for one, falls on an *ocean* cell of the grid).
-- Clicking the ring opens a discreet card: city and country on top, the
-  local time below, with the UTC offset and `+1 dia` when the date over
-  there is not the date here. Clicking again closes it. Pinned cities keep
-  their card open with no clicking at all.
+- Every saved city shows a **ring on its exact coordinate** — not snapped
+  to the 1° dot grid, since a city is not a land dot (Fortaleza, for one,
+  falls on an *ocean* cell of the grid).
+- Alongside the ring, the city's **name and local time are always in
+  view**. There is no click to open and nothing to switch on: a city that
+  is on the map is on the map with its clock showing. `+1 dia` appears next
+  to the time when the date over there is not the date here.
+- The label is **bare text, no card**: no background, no border, no country
+  line, no UTC offset. What separates it from the dot matrix is a dark halo
+  around the glyphs, and the two lines are set small on purpose so they sit
+  in the map rather than on top of it.
 - Times come from the IANA tzdb, so daylight saving is right by
   construction: Sydney reads `UTC+11` in January and `UTC+10` in July, and
   the 45- and 30-minute zones (Chatham, Kathmandu, St. John's) are not
@@ -50,35 +53,8 @@ on the map or take it off. The eye on a saved city pins its clock.
   that disappears from the catalog after a regeneration is dropped
   silently rather than blocking the app.
 
-## Click anywhere on the map
-
-Clicking any point drops a target marker and answers with the local time
-there, and the answer is offline: the TZBB polygon when the point is land,
-a nautical 15° band when it is open ocean (the polygons stop ~22 km
-offshore, and `Etc/GMT+2` is UTC−2 — the POSIX sign is inverted).
-
-- The **time comes first and never waits for the network**. The exact
-  **name** is a second phase: the nearest catalog city within 250 km gives
-  it right away, and only when that is missing or approximate (over 50 km)
-  is the network asked for a better one. A slow or dead network costs the
-  name, never the clock.
-- Names are never invented. Open ocean says **Mar aberto**, land with no
-  city within 250 km says **Sem cidade por perto**, and an approximate name
-  is written as `≈ Djanet · a 181 km` instead of pretending the click was
-  in Djanet.
-- Clicking a saved city's ring still selects that city; a map click closes
-  an open city card, because the attention just moved.
-- Each click carries a generation: a name that arrives after you clicked
-  somewhere else is discarded rather than labelling the new card with the
-  old place.
-- Limits worth knowing: the map has no zoom, so a click resolves to about
-  0.3° (~33 km at a 1200 pt window), and 76% of the surface is ocean, where
-  there is no city name to be had in the first place. The saved-cities list
-  is the precise path; this is the exploratory one.
-- The only network use is the name reserve
-  (`api.bigdatacloud.net/data/reverse-geocode-client`, no key), it is only
-  consulted when the offline name is missing or approximate, and responses
-  are cached per 0.25° cell so neighbouring clicks do not repeat a request.
+Worth knowing: with `Cidades` carrying a long list, the labels can overlap
+where cities are close together — there is no collision avoidance yet.
 
 ## City catalog
 

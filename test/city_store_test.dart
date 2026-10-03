@@ -9,25 +9,23 @@ void main() {
 
   group('SavedCities', () {
     test('compara por conteúdo, não por identidade', () {
-      const a = SavedCities(selected: {'1', '2'}, pinned: {'1'});
-      const b = SavedCities(selected: {'2', '1'}, pinned: {'1'});
+      const a = SavedCities(selected: {'1', '2'});
+      const b = SavedCities(selected: {'2', '1'});
 
       expect(a, b, reason: 'a ordem do conjunto não pode importar');
       expect(a.hashCode, b.hashCode);
       expect(a, isNot(const SavedCities(selected: {'1'})));
     });
 
-    test('copyWith troca um lado e preserva o outro', () {
-      const original = SavedCities(selected: {'1'}, pinned: {'1'});
+    test('copyWith troca o conjunto', () {
+      const original = SavedCities(selected: {'1'});
 
-      expect(original.copyWith(selected: {'2'}).pinned, {'1'});
-      expect(original.copyWith(pinned: const <String>{}).selected, {'1'});
+      expect(original.copyWith(selected: {'2'}).selected, {'2'});
       expect(original.copyWith(), original);
     });
 
     test('vazio por padrão', () {
       expect(const SavedCities().selected, isEmpty);
-      expect(const SavedCities().pinned, isEmpty);
     });
   });
 
@@ -37,7 +35,7 @@ void main() {
 
       expect(await store.load(), const SavedCities());
 
-      const saved = SavedCities(selected: {'a', 'b'}, pinned: {'b'});
+      const saved = SavedCities(selected: {'a', 'b'});
       await store.save(saved);
 
       expect(await store.load(), saved);
@@ -46,9 +44,7 @@ void main() {
     });
 
     test('pode nascer com um estado, para os testes de restauração', () async {
-      final store = MemoryCityStore(
-        const SavedCities(selected: {'a'}, pinned: {'a'}),
-      );
+      final store = MemoryCityStore(const SavedCities(selected: {'a'}));
 
       expect((await store.load()).selected, {'a'});
       expect(store.saveCount, 0, reason: 'nascer com estado não é gravar');
@@ -56,19 +52,16 @@ void main() {
   });
 
   group('SharedPreferencesCityStore', () {
-    test('grava e relê as duas listas', () async {
+    test('grava e relê a lista', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const store = SharedPreferencesCityStore();
 
-      await store.save(
-        const SavedCities(selected: {'1', '2'}, pinned: {'2'}),
-      );
+      await store.save(const SavedCities(selected: {'1', '2'}));
 
       // Lê do zero, como numa abertura nova do app.
       final reloaded = await const SharedPreferencesCityStore().load();
 
       expect(reloaded.selected, {'1', '2'});
-      expect(reloaded.pinned, {'2'});
     });
 
     test('sem nada gravado, devolve vazio em vez de estourar', () async {

@@ -13,15 +13,15 @@ import 'package:world_clock/user_location.dart';
 import 'package:world_clock/user_marker.dart';
 import 'package:world_clock/world_dot_map.dart';
 
-/// Os pontos das cidades salvas: onde caem, como abrem o overlay e — o contrato
-/// que mais importa — a garantia de que nada disso repinta os pontos do mapa.
+/// Os pontos das cidades salvas: onde caem, o rótulo que aparece SEMPRE ao lado
+/// de cada um e — o contrato que mais importa — a garantia de que nada disso
+/// repinta os pontos do mapa.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const mapSize = Size(1200, 600);
 
-  /// 03/10/2026 12:00 UTC — 09:00 em Fortaleza, 21:00 em Tóquio, mesmo dia nos
-  /// dois. Para o caso de dias diferentes, ver o teste do "+1 dia".
+  /// 03/10/2026 12:00 UTC — 09:00 em Fortaleza, 21:00 em Tóquio.
   final now = DateTime.utc(2026, 10, 3, 12);
   final here = DateTime(2026, 10, 3, 9);
 
@@ -74,11 +74,7 @@ void main() {
       );
       expect(
         offset,
-        MoonMarker.offsetFor(
-          fortaleza.longitude,
-          fortaleza.latitude,
-          mapSize,
-        ),
+        MoonMarker.offsetFor(fortaleza.longitude, fortaleza.latitude, mapSize),
       );
     });
 
@@ -107,9 +103,6 @@ void main() {
     Future<void> pumpMarkers(
       WidgetTester tester, {
       required List<CityClock> cities,
-      String? selectedId,
-      Set<String> pinnedIds = const <String>{},
-      ValueChanged<String>? onSelect,
       DateTime? at,
       DateTime? from,
     }) async {
@@ -131,10 +124,6 @@ void main() {
                       now: at ?? now,
                       here: from ?? here,
                       land: MapThemes.standard.land,
-                      background: MapThemes.standard.background,
-                      selectedId: selectedId,
-                      pinnedIds: pinnedIds,
-                      onSelect: onSelect,
                     ),
                   ),
                 ],
@@ -168,109 +157,83 @@ void main() {
       }
     });
 
-    testWidgets('sem clique nem fixação, nenhum overlay aparece', (
+    testWidgets('o rótulo aparece para TODA cidade, sem clique nenhum', (
       tester,
     ) async {
       await pumpMarkers(tester, cities: clocks);
 
-      expect(find.byType(PanelCard), findsNothing);
-    });
-
-    testWidgets('a cidade clicada abre o overlay com nome, país e horário', (
-      tester,
-    ) async {
-      await pumpMarkers(
-        tester,
-        cities: clocks,
-        selectedId: clocks.first.city.id,
-      );
-
-      expect(find.byType(PanelCard), findsOneWidget);
       expect(find.text('Fortaleza'), findsOneWidget);
-      expect(find.text('Brasil'), findsOneWidget);
       expect(find.text('09:00'), findsOneWidget);
-      expect(find.text('UTC-03'), findsOneWidget);
-      // Tóquio não foi clicada nem presa: sem cartão.
-      expect(find.text('Tóquio'), findsNothing);
+      expect(find.text('Tóquio'), findsOneWidget);
+      expect(find.text('21:00'), findsOneWidget);
     });
 
-    testWidgets('a cidade presa mantém o overlay, sem clique nenhum', (
+    testWidgets('o rótulo é só nome e hora: sem cartão, sem país, sem UTC', (
       tester,
     ) async {
-      final tokyo = clocks[1];
-      await pumpMarkers(
-        tester,
-        cities: [tokyo],
-        pinnedIds: {tokyo.city.id},
-      );
+      await pumpMarkers(tester, cities: [clocks.first]);
 
-      expect(find.text('Tóquio'), findsOneWidget);
-      expect(find.text('Japão'), findsOneWidget);
-      expect(find.text('21:00'), findsOneWidget);
-      expect(find.text('UTC+09'), findsOneWidget);
+      // Sem cartão em volta: nada de `PanelCard` (o painel da Lua e o do menu
+      // continuam sendo cartões; o rótulo da cidade, não).
+      expect(find.byType(PanelCard), findsNothing);
+      // Sem a linha do país e sem o deslocamento do fuso.
+      expect(find.text('Brasil'), findsNothing);
+      expect(find.textContaining('UTC'), findsNothing);
+      // E exatamente dois textos: o nome e o horário.
+      expect(find.byType(Text), findsNWidgets(2));
+    });
+
+    testWidgets('a fonte do rótulo é menor que a de um cartão', (tester) async {
+      await pumpMarkers(tester, cities: [clocks.first]);
+
+      final name = tester.widget<Text>(find.text('Fortaleza'));
+      final time = tester.widget<Text>(find.text('09:00'));
+
+      expect(name.style?.fontSize, CityMarkers.nameFontSize);
+      expect(time.style?.fontSize, CityMarkers.timeFontSize);
+      expect(CityMarkers.nameFontSize, lessThan(13));
+      expect(CityMarkers.timeFontSize, lessThan(22));
+      // O horário continua maior que o nome: o número é a informação.
+      expect(CityMarkers.timeFontSize, greaterThan(CityMarkers.nameFontSize));
+    });
+
+    testWidgets('o texto tem halo escuro — é o que o separa do mapa', (
+      tester,
+    ) async {
+      await pumpMarkers(tester, cities: [clocks.first]);
+
+      for (final label in ['Fortaleza', '09:00']) {
+        final text = tester.widget<Text>(find.text(label));
+        expect(
+          text.style?.shadows,
+          isNotEmpty,
+          reason: 'sem caixa, o halo é a única separação do mapa',
+        );
+      }
     });
 
     testWidgets('o "+1 dia" aparece e some quando o dia de quem olha vira', (
       tester,
     ) async {
       final tokyo = clocks[1];
-      Future<void> pumpAt(DateTime utc, DateTime viewer) => pumpMarkers(
-        tester,
-        cities: [tokyo],
-        pinnedIds: {tokyo.city.id},
-        at: utc,
-        from: viewer,
-      );
+      Future<void> pumpAt(DateTime utc, DateTime viewer) =>
+          pumpMarkers(tester, cities: [tokyo], at: utc, from: viewer);
 
       // 01:00 UTC: 22:00 do dia 2 em São Paulo, 10:00 do dia 3 em Tóquio.
       await pumpAt(DateTime.utc(2026, 10, 3, 1), DateTime(2026, 10, 2, 22));
       expect(find.text('10:00'), findsOneWidget);
       expect(find.text('+1 dia'), findsOneWidget);
 
-      // 02:00 UTC: o dia de quem olha AINDA é o 2, então o "+1 dia" fica.
-      await pumpAt(DateTime.utc(2026, 10, 3, 2), DateTime(2026, 10, 2, 23));
-      expect(find.text('11:00'), findsOneWidget);
-      expect(find.text('+1 dia'), findsOneWidget);
-
       // 03:00 UTC: São Paulo vira para o dia 3 (00:00) e a diferença some —
-      // exatamente no instante em que os dois calendários se encontram, e não
-      // "uma hora depois" nem "quando o relógio redesenhar".
+      // exatamente no instante em que os dois calendários se encontram.
       await pumpAt(DateTime.utc(2026, 10, 3, 3), DateTime(2026, 10, 3, 0));
       expect(find.text('12:00'), findsOneWidget);
       expect(find.text('+1 dia'), findsNothing);
     });
 
-    testWidgets('clicar no disco avisa a tela com o id da cidade', (
-      tester,
-    ) async {
-      final city = clocks.first;
-      final tapped = <String>[];
-      await pumpMarkers(tester, cities: [city], onSelect: tapped.add);
-
-      await tester.tap(discFinder());
-      await tester.pump();
-
-      expect(tapped, [city.city.id]);
-    });
-
-    testWidgets('sem handler, o disco não quebra ao ser clicado', (
-      tester,
-    ) async {
-      await pumpMarkers(tester, cities: [clocks.first]);
-
-      await tester.tap(discFinder());
-      await tester.pump();
-
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('o overlay nunca cobre o próprio disco', (tester) async {
+    testWidgets('o rótulo nunca cobre o próprio disco', (tester) async {
       for (final clock in clocks) {
-        await pumpMarkers(
-          tester,
-          cities: [clock],
-          pinnedIds: {clock.city.id},
-        );
+        await pumpMarkers(tester, cities: [clock]);
 
         final mapRect = tester.getRect(find.byType(CityMarkers));
         final center =
@@ -282,29 +245,40 @@ void main() {
         );
 
         expect(
-          tester.getRect(find.byType(PanelCard)).overlaps(disc),
+          tester.getRect(find.text(clock.city.name)).overlaps(disc),
           isFalse,
-          reason: 'overlay cobriu o disco de ${clock.city.name}',
+          reason: 'rótulo cobriu o disco de ${clock.city.name}',
         );
       }
     });
 
-    testWidgets('nenhum texto do overlay sai cortado', (tester) async {
-      await pumpMarkers(
-        tester,
-        cities: clocks,
-        pinnedIds: {for (final clock in clocks) clock.city.id},
-      );
+    testWidgets('o rótulo abre para o lado que tem espaço', (tester) async {
+      await pumpMarkers(tester, cities: [clocks.first]);
 
-      // Dois cartões, quatro textos cada (nome, país, hora, fuso).
+      // Cidade na metade esquerda: o rótulo abre para a DIREITA dela, e não
+      // por cima do disco.
+      final mapRect = tester.getRect(find.byType(CityMarkers));
+      final nameRect = tester.getRect(find.text('Fortaleza'));
+      final discCenter =
+          mapRect.topLeft + CityMarkers.offsetFor(fortaleza, mapRect.size);
+      expect(
+        nameRect.left,
+        greaterThan(discCenter.dx),
+        reason: 'Fortaleza não está colada na borda; o rótulo abre à direita',
+      );
+    });
+
+    testWidgets('nenhum texto do rótulo sai cortado', (tester) async {
+      await pumpMarkers(tester, cities: clocks);
+
       final texts = find.byType(Text).evaluate().toList();
-      expect(texts.length, greaterThanOrEqualTo(8));
+      expect(texts.length, greaterThanOrEqualTo(4));
       for (final element in texts) {
         final paragraph = element.renderObject! as RenderParagraph;
         expect(
           paragraph.didExceedMaxLines,
           isFalse,
-          reason: '"${(element.widget as Text).data}" não caberia no overlay',
+          reason: '"${(element.widget as Text).data}" não caberia no rótulo',
         );
       }
     });
@@ -319,9 +293,8 @@ void main() {
     /// a espera nunca termina.
     Future<void> pumpScreen(
       WidgetTester tester, {
-      required List<CityClock> cities,
-      String? selectedId,
-      Set<String> pinned = const <String>{},
+      required DateTime mapNow,
+      required DateTime cityNow,
     }) async {
       await tester.binding.setSurfaceSize(const Size(1400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -337,18 +310,15 @@ void main() {
                     clipBehavior: Clip.none,
                     children: [
                       Positioned.fill(
-                        child: RepaintBoundary(child: WorldDotMap(now: now)),
+                        child: RepaintBoundary(child: WorldDotMap(now: mapNow)),
                       ),
                       Positioned.fill(
                         child: CityMarkers(
-                          cities: cities,
+                          cities: clocks,
                           mapSize: mapSize,
-                          now: now,
-                          here: here,
+                          now: cityNow,
+                          here: cityNow,
                           land: MapThemes.standard.land,
-                          background: MapThemes.standard.background,
-                          selectedId: selectedId,
-                          pinnedIds: pinned,
                         ),
                       ),
                     ],
@@ -372,23 +342,23 @@ void main() {
       return tester.widget<CustomPaint>(finder).painter!;
     }
 
-    testWidgets('selecionar e fixar não repinta os pontos do mapa', (
+    testWidgets('o minuto virando não repinta os pontos do mapa', (
       tester,
     ) async {
-      await pumpScreen(tester, cities: clocks);
-
+      // O `now` do MAPA fica parado: a luz solar do mapa muda a cada 5 min, e
+      // mexer nele faria o mapa repintar por conta própria — o que não é o que
+      // este teste investiga. Quem anda é o relógio das cidades.
+      await pumpScreen(tester, mapNow: now, cityNow: now);
       final before = mapPainter(tester);
 
-      // Abrir o overlay de uma cidade e prender a outra muda SÓ a camada de
-      // marcadores; os pontos do mapa seguem recebendo os mesmos dados.
       await pumpScreen(
         tester,
-        cities: clocks,
-        selectedId: clocks.first.city.id,
-        pinned: {clocks.last.city.id},
+        mapNow: now,
+        cityNow: now.add(const Duration(minutes: 1)),
       );
 
-      expect(find.byType(PanelCard), findsNWidgets(2));
+      expect(find.text('09:01'), findsOneWidget);
+      expect(find.text('21:01'), findsOneWidget);
       expect(
         mapPainter(tester).shouldRepaint(before),
         isFalse,

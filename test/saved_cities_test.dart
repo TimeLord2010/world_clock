@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:world_clock/city.dart';
@@ -7,11 +8,12 @@ import 'package:world_clock/city_markers.dart';
 import 'package:world_clock/city_store.dart';
 import 'package:world_clock/main.dart';
 import 'package:world_clock/panel_card.dart';
+import 'package:world_clock/settings_menu.dart';
 import 'package:world_clock/user_location.dart';
 import 'package:world_clock/world_dot_map.dart';
 
 /// A tela com cidades salvas de verdade: o que o disco entrega vira ponto no
-/// mapa, clique abre o overlay e um id que sumiu do catálogo não derruba nada.
+/// mapa COM o horário à vista, e um id que sumiu do catálogo não derruba nada.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,7 +23,6 @@ void main() {
       const UserLocation.failed(UserLocationFailure.unavailable);
 
   late City fortaleza;
-  late City tokyo;
 
   setUpAll(() async {
     tzdata.initializeTimeZones();
@@ -33,12 +34,20 @@ void main() {
     fortaleza = catalog.firstWhere(
       (city) => city.name == 'Fortaleza' && city.region == 'Ceará',
     );
-    tokyo = catalog.firstWhere((city) => city.name == 'Tóquio');
   });
 
   Finder discs() => find.descendant(
     of: find.byType(CityMarkers),
     matching: find.byType(CustomPaint),
+  );
+
+  /// Um texto com cara de horário (`09:00`), sem fixar qual é: nesta tela o
+  /// relógio é o do sistema.
+  Finder clockText() => find.byWidgetPredicate(
+    (widget) =>
+        widget is Text &&
+        widget.data != null &&
+        RegExp(r'^\d{2}:\d{2}$').hasMatch(widget.data!),
   );
 
   /// Monta a TELA de verdade — o caminho inteiro, do `WorldMapScreen` ao
@@ -49,7 +58,7 @@ void main() {
   /// `testWidgets` essa cadeia não anda. `setSurfaceSize` fica FORA dele: ele
   /// espera um quadro, e o `runAsync` suspende quem produz esse quadro.
   Future<void> pumpScreen(WidgetTester tester, CityStore? store) async {
-    await tester.binding.setSurfaceSize(const Size(1400, 800));
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.runAsync(() async {
       await tester.pumpWidget(
@@ -70,12 +79,30 @@ void main() {
   Future<void> tearDownScreen(WidgetTester tester) =>
       tester.pumpWidget(const SizedBox());
 
-  testWidgets('cidade salva vira ponto no mapa, sem overlay', (tester) async {
+  testWidgets('cidade salva vira ponto COM o horário à vista, sem clique', (
+    tester,
+  ) async {
     final store = MemoryCityStore(SavedCities(selected: {fortaleza.id}));
     await pumpScreen(tester, store);
 
     expect(discs(), findsOneWidget);
+    expect(find.text('Fortaleza'), findsOneWidget);
+    expect(clockText(), findsOneWidget);
+
+    await tearDownScreen(tester);
+  });
+
+  testWidgets('o rótulo do mapa não é cartão, e não tem país nem fuso', (
+    tester,
+  ) async {
+    final store = MemoryCityStore(SavedCities(selected: {fortaleza.id}));
+    await pumpScreen(tester, store);
+
+    // O mapa e o rótulo não desenham cartão nenhum: `PanelCard` é do menu e do
+    // painel da Lua, e nenhum dos dois está aberto.
     expect(find.byType(PanelCard), findsNothing);
+    expect(find.text('Brasil'), findsNothing);
+    expect(find.textContaining('UTC'), findsNothing);
 
     await tearDownScreen(tester);
   });
@@ -90,46 +117,6 @@ void main() {
 
     expect(discs(), findsOneWidget);
     expect(tester.takeException(), isNull);
-
-    await tearDownScreen(tester);
-  });
-
-  testWidgets('cidade fixada abre o overlay já na abertura', (tester) async {
-    final store = MemoryCityStore(
-      SavedCities(selected: {tokyo.id}, pinned: {tokyo.id}),
-    );
-    await pumpScreen(tester, store);
-
-    expect(find.text('Tóquio'), findsOneWidget);
-    expect(find.text('Japão'), findsOneWidget);
-    // Nove horas à frente de quem está em UTC-3, ou seja, outra hora do dia.
-    expect(find.textContaining(':'), findsWidgets);
-
-    await tearDownScreen(tester);
-  });
-
-  testWidgets('clicar no ponto abre o overlay; clicar de novo fecha', (
-    tester,
-  ) async {
-    final store = MemoryCityStore(SavedCities(selected: {fortaleza.id}));
-    await pumpScreen(tester, store);
-
-    expect(find.byType(PanelCard), findsNothing);
-
-    await tester.tap(discs());
-    await tester.pump();
-
-    expect(find.byType(PanelCard), findsOneWidget);
-    expect(find.text('Fortaleza'), findsOneWidget);
-    expect(find.text('Brasil'), findsOneWidget);
-    expect(find.text('UTC-03'), findsOneWidget);
-
-    // Clicar de novo na MESMA cidade fecha — o disco é um interruptor, e não
-    // uma porta de mão única.
-    await tester.tap(discs());
-    await tester.pump();
-
-    expect(find.byType(PanelCard), findsNothing);
 
     await tearDownScreen(tester);
   });
@@ -149,31 +136,38 @@ void main() {
     await tearDownScreen(tester);
   });
 
-  testWidgets('selecionar uma cidade não repinta os pontos do mapa', (
+  testWidgets('escolher a cidade no menu faz o horário dela aparecer no mapa', (
     tester,
   ) async {
-    final store = MemoryCityStore(SavedCities(selected: {fortaleza.id}));
+    // O caminho inteiro, ponta a ponta: menu → painel de cidades → busca →
+    // tocar na linha → gravar → marcador com horário no mapa.
+    final store = MemoryCityStore();
     await pumpScreen(tester, store);
 
-    CustomPainter mapPainter() {
-      final finder = find.descendant(
-        of: find.byType(WorldDotMap),
-        matching: find.byType(CustomPaint),
-      );
-      return tester.widget<CustomPaint>(finder).painter!;
-    }
+    expect(discs(), findsNothing);
 
-    final before = mapPainter();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cidades'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsMenu), findsOneWidget);
 
-    await tester.tap(discs());
+    await tester.enterText(find.byType(TextField), 'fortaleza');
     await tester.pump();
+    await tester.tap(find.text('Fortaleza'));
+    await tester.pumpAndSettle();
 
-    expect(find.byType(PanelCard), findsOneWidget);
-    expect(
-      mapPainter().shouldRepaint(before),
-      isFalse,
-      reason: 'abrir o overlay de uma cidade não pode sujar os pontos do mapa',
-    );
+    // Gravou a escolha...
+    expect(store.saveCount, 1);
+    expect(store.cities.selected, {fortaleza.id});
+
+    // ...e o mapa já mostra o ponto com o horário. Fecha o menu para o painel
+    // sair da frente e sobrar só o rótulo do mapa.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fortaleza'), findsOneWidget);
+    expect(clockText(), findsOneWidget);
 
     await tearDownScreen(tester);
   });

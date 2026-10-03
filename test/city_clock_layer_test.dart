@@ -82,8 +82,6 @@ void main() {
                       cities: [tokyo],
                       mapSize: mapSize,
                       land: MapThemes.standard.land,
-                      background: MapThemes.standard.background,
-                      pinnedIds: {tokyo.city.id},
                       clock: clock,
                     ),
                   ),

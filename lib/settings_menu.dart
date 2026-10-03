@@ -36,9 +36,7 @@ class SettingsMenu extends StatefulWidget {
     this.locationNotice,
     this.cities = const <City>[],
     this.savedCityIds = const <String>{},
-    this.pinnedCityIds = const <String>{},
     this.onCityToggled,
-    this.onCityPinToggled,
   });
 
   /// Tema em uso hoje: marca a opção selecionada e aparece no item "Tema".
@@ -72,16 +70,10 @@ class SettingsMenu extends StatefulWidget {
   /// Ids das cidades salvas hoje — a bandeja mostra a contagem na linha.
   final Set<String> savedCityIds;
 
-  /// Ids das cidades com o horário sempre visível.
-  final Set<String> pinnedCityIds;
-
   /// Chamado com o id da cidade quando ela deve ser salva ou retirada. Nulo
   /// (o padrão) desliga a ação — os testes que só olham o menu não precisam
   /// saber de cidades.
   final ValueChanged<String>? onCityToggled;
-
-  /// Chamado com o id da cidade quando o "sempre visível" dela vira.
-  final ValueChanged<String>? onCityPinToggled;
 
   @override
   State<SettingsMenu> createState() => _SettingsMenuState();
@@ -351,9 +343,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     return CityPicker(
       cities: widget.cities,
       savedIds: widget.savedCityIds,
-      pinnedIds: widget.pinnedCityIds,
       onToggleSaved: (id) => widget.onCityToggled?.call(id),
-      onTogglePinned: (id) => widget.onCityPinToggled?.call(id),
       onBack: _leaveCitiesPanel,
       background: widget.theme.background,
     );

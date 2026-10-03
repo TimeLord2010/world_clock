@@ -25,9 +25,7 @@ class CityPicker extends StatefulWidget {
     super.key,
     required this.cities,
     required this.savedIds,
-    required this.pinnedIds,
     required this.onToggleSaved,
-    required this.onTogglePinned,
     required this.onBack,
     required this.background,
   });
@@ -35,17 +33,11 @@ class CityPicker extends StatefulWidget {
   /// O catálogo inteiro. Vazio enquanto ele não chegou (a busca espera).
   final List<City> cities;
 
-  /// Ids das cidades salvas hoje (aparecem com o check e com o olho).
+  /// Ids das cidades salvas hoje (aparecem com o check).
   final Set<String> savedIds;
-
-  /// Ids das cidades com o horário sempre visível.
-  final Set<String> pinnedIds;
 
   /// Chamado com o id da cidade quando ela deve ser salva ou retirada.
   final ValueChanged<String> onToggleSaved;
-
-  /// Chamado com o id da cidade quando o "sempre visível" dela vira.
-  final ValueChanged<String> onTogglePinned;
 
   /// Fecha o painel e volta para o painel de opções.
   final VoidCallback onBack;
@@ -218,15 +210,13 @@ class _CityPickerState extends State<CityPicker> {
     );
   }
 
-  /// Uma cidade na lista: nome e contexto à esquerda, controles à direita.
+  /// Uma cidade na lista: nome e contexto à esquerda, o check à direita.
   ///
-  /// A LINHA INTEIRA salva/retira (é o gesto óbvio e o alvo grande); o olho, que
-  /// só aparece na cidade já salva, fixa o horário. O `Expanded` no meio é o que
-  /// faz o nome longo ser cortado com reticências em vez de empurrar os
-  /// controles para fora do painel.
+  /// A LINHA INTEIRA salva/retira (é o gesto óbvio e o alvo grande). O
+  /// `Expanded` no meio é o que faz o nome longo ser cortado com reticências em
+  /// vez de empurrar o check para fora do painel.
   Widget _row(City city) {
     final saved = widget.savedIds.contains(city.id);
-    final pinned = widget.pinnedIds.contains(city.id);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -271,19 +261,6 @@ class _CityPickerState extends State<CityPicker> {
                   ],
                 ),
               ),
-              if (saved)
-                IconButton(
-                  onPressed: () => widget.onTogglePinned(city.id),
-                  icon: Icon(
-                    pinned ? Icons.visibility : Icons.visibility_off_outlined,
-                    size: 16,
-                  ),
-                  color: pinned ? PanelCard.textColor : PanelCard.dimTextColor,
-                  tooltip: pinned
-                      ? 'Horário sempre visível'
-                      : 'Mostrar o horário sempre',
-                  visualDensity: VisualDensity.compact,
-                ),
             ],
           ),
         ),

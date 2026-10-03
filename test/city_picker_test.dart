@@ -33,7 +33,6 @@ void main() {
   Future<_HarnessState> pumpPicker(
     WidgetTester tester, {
     Set<String> saved = const <String>{},
-    Set<String> pinned = const <String>{},
     List<City>? cities,
   }) async {
     await tester.binding.setSurfaceSize(const Size(900, 700));
@@ -46,7 +45,6 @@ void main() {
             child: _Harness(
               cities: cities ?? catalog,
               saved: saved,
-              pinned: pinned,
             ),
           ),
         ),
@@ -158,7 +156,7 @@ void main() {
     });
   });
 
-  group('salvar, retirar e fixar', () {
+  group('salvar e retirar', () {
     testWidgets('clicar na linha salva a cidade e avisa a tela', (
       tester,
     ) async {
@@ -182,35 +180,6 @@ void main() {
 
       expect(state.saved, isEmpty);
       expect(find.text('0 salvas'), findsOneWidget);
-    });
-
-    testWidgets('sem cidade salva não há controle de fixar', (tester) async {
-      await pumpPicker(tester);
-      await search(tester, 'tokyo');
-
-      expect(find.byIcon(Icons.visibility), findsNothing);
-      expect(find.byIcon(Icons.visibility_off_outlined), findsNothing);
-    });
-
-    testWidgets('o olho só aparece na cidade salva, e fixa o horário', (
-      tester,
-    ) async {
-      final state = await pumpPicker(tester, saved: {fortaleza.id});
-      await search(tester, 'fortaleza');
-
-      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.visibility_off_outlined));
-      await tester.pump();
-
-      expect(state.pinned, {fortaleza.id});
-      expect(find.byIcon(Icons.visibility), findsOneWidget);
-
-      // E desfixa.
-      await tester.tap(find.byIcon(Icons.visibility));
-      await tester.pump();
-
-      expect(state.pinned, isEmpty);
     });
 
     testWidgets('a contagem no cabeçalho acompanha o que está salvo', (
@@ -241,9 +210,7 @@ void main() {
             body: CityPicker(
               cities: catalog,
               savedIds: const <String>{},
-              pinnedIds: const <String>{},
               onToggleSaved: (_) {},
-              onTogglePinned: (_) {},
               onBack: () => backs++,
               background: MapThemes.standard.background,
             ),
@@ -342,15 +309,10 @@ void main() {
 /// O painel com estado: os testes precisam que salvar/fixar valham já no quadro
 /// seguinte, como valem na tela de verdade.
 class _Harness extends StatefulWidget {
-  const _Harness({
-    required this.cities,
-    this.saved = const <String>{},
-    this.pinned = const <String>{},
-  });
+  const _Harness({required this.cities, this.saved = const <String>{}});
 
   final List<City> cities;
   final Set<String> saved;
-  final Set<String> pinned;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -358,28 +320,19 @@ class _Harness extends StatefulWidget {
 
 class _HarnessState extends State<_Harness> {
   late Set<String> saved = {...widget.saved};
-  late Set<String> pinned = {...widget.pinned};
 
   /// Os ids avisados, na ordem — os testes conferem o que a tela recebeu.
   final List<String> toggled = <String>[];
-  final List<String> pinnedToggled = <String>[];
 
   @override
   Widget build(BuildContext context) {
     return CityPicker(
       cities: widget.cities,
       savedIds: saved,
-      pinnedIds: pinned,
       onToggleSaved: (id) => setState(() {
         toggled.add(id);
         if (!saved.remove(id)) {
           saved.add(id);
-        }
-      }),
-      onTogglePinned: (id) => setState(() {
-        pinnedToggled.add(id);
-        if (!pinned.remove(id)) {
-          pinned.add(id);
         }
       }),
       onBack: () {},

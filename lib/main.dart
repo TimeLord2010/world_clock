@@ -9,12 +9,9 @@ import 'city_catalog.dart';
 import 'city_clock.dart';
 import 'city_clock_layer.dart';
 import 'city_store.dart';
-import 'clicked_point.dart';
-import 'map_geometry.dart';
 import 'map_theme.dart';
 import 'moon_marker.dart';
 import 'moon_position.dart';
-import 'place_lookup.dart';
 import 'settings_menu.dart';
 import 'user_location.dart';
 import 'user_marker.dart';
@@ -75,8 +72,6 @@ class WorldMapScreen extends StatefulWidget {
     super.key,
     this.locationLookup = UserLocationResolver.resolve,
     this.cityStore,
-    this.placeLookup,
-    this.nameLookup,
   });
 
   /// Como descobrir a posição do usuário. Injetável para os testes rodarem sem
@@ -91,17 +86,6 @@ class WorldMapScreen extends StatefulWidget {
   /// não se interessam por cidades (a maioria) não precisam saber que isso
   /// existe, e quem quer testar persistência injeta um `MemoryCityStore`.
   final CityStore? cityStore;
-
-  /// Como descobrir o que há num ponto clicado no mapa. Nulo (o padrão) monta o
-  /// [OfflinePlaceLookup] com o catálogo carregado — o fuso sai sempre dos
-  /// polígonos ou da faixa náutica, e o nome da cidade mais próxima.
-  final PlaceLookup? placeLookup;
-
-  /// A reserva de NOME exato (a única coisa que usa rede). Nula (o padrão) usa o
-  /// `BigDataCloudNameLookup`; os testes injetam uma fonte controlada — ou
-  /// deixam a padrão, que sob o `HttpOverrides` do `flutter_test` não alcança a
-  /// rede de verdade.
-  final PlaceNameLookup? nameLookup;
 
   @override
   State<WorldMapScreen> createState() => _WorldMapScreenState();
@@ -139,30 +123,6 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// Fica na tela porque o painel precisa poder BUSCAR em qualquer cidade, e não
   /// só nas salvas — sem ele, não haveria como adicionar a primeira.
   List<City> _catalog = const <City>[];
-
-  /// A cidade com o overlay aberto por clique — uma só por vez. O overlay
-  /// "sempre visível" é outra coisa: vem de [_pinnedCityIds].
-  String? _selectedCityId;
-
-  /// As cidades com o horário sempre visível, sem depender de clique.
-  Set<String> _pinnedCityIds = const <String>{};
-
-  /// O ponto que o usuário clicou no mapa, quando há um. Um só por vez: um
-  /// clique novo substitui o anterior.
-  ClickedPoint? _clickedPoint;
-
-  /// Qual clique é o atual. Cada clique incrementa; uma resposta que chega
-  /// depois de outro clique é DESCARTADA — senão o nome de um ponto sobrescreve
-  /// o cartão do ponto que o usuário clicou em seguida.
-  int _clickGeneration = 0;
-
-  /// Como resolver um ponto clicado. Nasce no [_loadCities], quando o catálogo
-  /// chega (é ele que dá o nome de terra firme).
-  PlaceLookup? _placeLookup;
-
-  /// A reserva de nome exato. Separada porque só entra DEPOIS da resposta
-  /// offline, e nunca pode segurá-la.
-  PlaceNameLookup? _nameLookup;
 
   @override
   void initState() {
@@ -223,89 +183,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     setState(() {
       _catalog = catalog;
       _cities = [for (final city in chosen) CityClock(city)];
-      // Ids de cidades que não existem mais no catálogo ficam no conjunto sem
-      // efeito nenhum (só é consultado com `contains`), e o próximo `save`
-      // limpa.
-      _pinnedCityIds = saved.pinned;
-      // O clique funciona mesmo sem catálogo: o fuso sai do polígono ou da faixa
-      // náutica, que não dependem dele. Só o NOME de terra firme é que fica sem
-      // fonte.
-      _placeLookup =
-          widget.placeLookup ?? OfflinePlaceLookup(catalog: catalog);
-      _nameLookup = widget.nameLookup ?? BigDataCloudNameLookup();
     });
-  }
-
-  /// Trata um clique no mapa: marca o ponto e responde o que se sabe dele.
-  ///
-  /// **Duas fases, de propósito.** A primeira é offline e responde a HORA — a
-  /// pergunta que o usuário fez — sem esperar rede nenhuma; a segunda pede o
-  /// nome exato e o aplica por cima quando (e se) chegar. Numa fase só, um
-  /// clique longe de qualquer cidade ficaria segurando o horário por até 5
-  /// segundos, que é o pior desfecho possível para um relógio.
-  void _clickAt(Offset local, Size mapSize) {
-    final point = MapPoint.at(local, mapSize);
-    final generation = ++_clickGeneration;
-
-    setState(() {
-      _clickedPoint = ClickedPoint(point: point);
-      // O clique no mapa fecha o overlay de cidade aberto: a atenção vai para
-      // onde o usuário acabou de clicar.
-      _selectedCityId = null;
-    });
-
-    final lookup = _placeLookup;
-    if (lookup == null) {
-      return;
-    }
-    unawaited(() async {
-      // Fase 1: offline, imediata.
-      final place = await lookup.resolve(point);
-      if (!mounted || generation != _clickGeneration) {
-        return;
-      }
-      setState(() => _clickedPoint = ClickedPoint(point: point, place: place));
-
-      // Fase 2: só quando o offline não deu um nome exato. Um nome que já é o
-      // lugar do clique não justifica requisição nenhuma.
-      final source = _nameLookup;
-      if (source == null || (place.name != null && !place.approximate)) {
-        return;
-      }
-      final PlaceName? exact;
-      try {
-        exact = await source.lookup(point);
-      } catch (error) {
-        if (kDebugMode) {
-          debugPrint('[nome] consulta falhou: $error');
-        }
-        if (!mounted || generation != _clickGeneration) {
-          return;
-        }
-        // A hora e o nome do catálogo continuam valendo; o motivo fica anotado
-        // para o cartão poder explicar a ausência, em vez de ficar mudo.
-        setState(
-          () => _clickedPoint = ClickedPoint(
-            point: point,
-            place: place.withNotice('nome exato indisponível'),
-          ),
-        );
-        return;
-      }
-      if (!mounted || generation != _clickGeneration) {
-        return;
-      }
-      final name = exact;
-      if (name == null) {
-        return;
-      }
-      setState(
-        () => _clickedPoint = ClickedPoint(
-          point: point,
-          place: place.withExactName(name),
-        ),
-      );
-    }());
   }
 
   /// A cidade do catálogo com este id, ou nulo (id órfão).
@@ -332,32 +210,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
           for (final clock in _cities)
             if (clock.city.id != id) clock,
         ];
-        // Retirar a cidade solta o pino: um "sempre visível" de uma cidade que
-        // não está mais no mapa não teria onde aparecer.
-        _pinnedCityIds = {..._pinnedCityIds}..remove(id);
-        if (_selectedCityId == id) {
-          _selectedCityId = null;
-        }
       } else {
         // Ordem por população, a mesma do catálogo: os marcadores não dançam
         // conforme a ordem em que o usuário escolheu.
         _cities = [..._cities, CityClock(city)]
-          ..sort(
-            (a, b) => b.city.population.compareTo(a.city.population),
-          );
+          ..sort((a, b) => b.city.population.compareTo(a.city.population));
       }
-    });
-    unawaited(_persistCities());
-  }
-
-  /// Liga ou desliga o "horário sempre visível" de uma cidade.
-  void _togglePinnedCity(String id) {
-    setState(() {
-      final pinned = {..._pinnedCityIds};
-      if (!pinned.remove(id)) {
-        pinned.add(id);
-      }
-      _pinnedCityIds = pinned;
     });
     unawaited(_persistCities());
   }
@@ -371,26 +229,13 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     }
     try {
       await store.save(
-        SavedCities(
-          selected: {for (final clock in _cities) clock.city.id},
-          pinned: _pinnedCityIds,
-        ),
+        SavedCities(selected: {for (final clock in _cities) clock.city.id}),
       );
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[cidades] falha ao gravar as cidades salvas: $error');
       }
     }
-  }
-
-  /// Abre o overlay da cidade clicada; clicar de novo na mesma fecha.
-  ///
-  /// Não grava: a cidade já está salva (senão não estaria no mapa), e qual
-  /// overlay está aberto agora é estado de sessão, não escolha do usuário.
-  void _selectCity(String id) {
-    setState(() {
-      _selectedCityId = _selectedCityId == id ? null : id;
-    });
   }
 
   /// Pergunta a posição e publica o resultado. Falha não é silenciosa: o
@@ -439,84 +284,70 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                       : constraints.maxHeight * 2;
                   final mapSize = Size(mapWidth, mapWidth / 2);
                   return Center(
-                    // O detector envolve EXATAMENTE o retângulo do mapa, então o
-                    // `localPosition` do toque já vem no espaço do mapa — não há
-                    // conversão global→local em lugar nenhum. E o filho é opaco
-                    // (o `ColoredBox` do mapa cobre a área toda), então o toque
-                    // em qualquer ponto chega aqui.
-                    child: GestureDetector(
-                      onTapUp: (details) =>
-                          _clickAt(details.localPosition, mapSize),
-                      child: SizedBox(
-                        width: mapSize.width,
-                        height: mapSize.height,
-                        child: Stack(
-                          // Clip.none: o overlay da Lua pode passar da borda do
-                          // mapa quando ela está colada no limite (é o Stack de
-                          // fora, da tela, que acaba recortando).
-                          clipBehavior: Clip.none,
-                          children: [
-                            // O RepaintBoundary envolve SÓ os pontos do mapa. A
-                            // Lua é irmã dele no Stack: um tique da Lua — ou o
-                            // hover no marcador — não invalida a camada do mapa
-                            // (dezenas de milhares de pontos). O pintor dos
-                            // pontos segue recebendo os mesmos dados, então nem o
-                            // rebuild do hover faz o mapa repintar.
-                            Positioned.fill(
-                              child: RepaintBoundary(
-                                child: WorldDotMap(
-                                  now: _now,
-                                  backgroundColor: _theme.background,
-                                  dotColor: _theme.land,
-                                  oceanColor: _theme.ocean,
-                                  includeTwilight: _includeTwilight,
-                                ),
+                    child: SizedBox(
+                      width: mapSize.width,
+                      height: mapSize.height,
+                      child: Stack(
+                        // Clip.none: o overlay da Lua pode passar da borda do
+                        // mapa quando ela está colada no limite (é o Stack de
+                        // fora, da tela, que acaba recortando).
+                        clipBehavior: Clip.none,
+                        children: [
+                          // O RepaintBoundary envolve SÓ os pontos do mapa. A
+                          // Lua é irmã dele no Stack: um tique da Lua — ou o
+                          // hover no marcador — não invalida a camada do mapa
+                          // (dezenas de milhares de pontos). O pintor dos
+                          // pontos segue recebendo os mesmos dados, então nem o
+                          // rebuild do hover faz o mapa repintar.
+                          Positioned.fill(
+                            child: RepaintBoundary(
+                              child: WorldDotMap(
+                                now: _now,
+                                backgroundColor: _theme.background,
+                                dotColor: _theme.land,
+                                oceanColor: _theme.ocean,
+                                includeTwilight: _includeTwilight,
                               ),
                             ),
-                            // Positioned.fill: o marcador se posiciona sozinho (e
-                            // o overlay junto), porque a posição depende do
-                            // tamanho do mapa em pontos.
-                            //
-                            // As CIDADES vêm antes da Lua e do ponto do usuário no
-                            // Stack (ou seja, por baixo dos dois): num encontro
-                            // fortuito, quem manda é o "você está aqui" e o objeto
-                            // celeste, que não são clicáveis nem escolhidos pelo
-                            // usuário. O ponto do usuário é IgnorePointer, então um
-                            // clique sobre a cidade atravessa e chega nela.
-                            Positioned.fill(
-                              child: CityClockLayer(
-                                cities: _cities,
-                                mapSize: mapSize,
-                                land: _theme.land,
-                                background: _theme.background,
-                                selectedId: _selectedCityId,
-                                pinnedIds: _pinnedCityIds,
-                                onSelect: _selectCity,
-                                clickedPoint: _clickedPoint,
-                              ),
+                          ),
+                          // Positioned.fill: o marcador se posiciona sozinho (e
+                          // o overlay junto), porque a posição depende do
+                          // tamanho do mapa em pontos.
+                          //
+                          // As CIDADES vêm antes da Lua e do ponto do usuário no
+                          // Stack (ou seja, por baixo dos dois): num encontro
+                          // fortuito, quem manda é o "você está aqui" e o objeto
+                          // celeste, que não são clicáveis nem escolhidos pelo
+                          // usuário. O ponto do usuário é IgnorePointer, então um
+                          // clique sobre a cidade atravessa e chega nela.
+                          Positioned.fill(
+                            child: CityClockLayer(
+                              cities: _cities,
+                              mapSize: mapSize,
+                              land: _theme.land,
                             ),
-                            Positioned.fill(
-                              child: MoonMarker(
-                                status: _moon,
-                                mapSize: mapSize,
-                                background: _theme.background,
-                              ),
+                          ),
+                          Positioned.fill(
+                            child: MoonMarker(
+                              status: _moon,
+                              mapSize: mapSize,
+                              background: _theme.background,
                             ),
-                            // O ponto do usuário fica DEPOIS do marcador da Lua
-                            // no Stack, ou seja, por cima: se os dois caírem no
-                            // mesmo lugar, quem não pode sumir é o "você está
-                            // aqui". Como o marcador da Lua, ele mora fora do
-                            // RepaintBoundary dos pontos.
-                            Positioned.fill(
-                              child: UserMarker(
-                                location: _location,
-                                mapSize: mapSize,
-                                land: _theme.land,
-                                background: _theme.background,
-                              ),
+                          ),
+                          // O ponto do usuário fica DEPOIS do marcador da Lua
+                          // no Stack, ou seja, por cima: se os dois caírem no
+                          // mesmo lugar, quem não pode sumir é o "você está
+                          // aqui". Como o marcador da Lua, ele mora fora do
+                          // RepaintBoundary dos pontos.
+                          Positioned.fill(
+                            child: UserMarker(
+                              location: _location,
+                              mapSize: mapSize,
+                              land: _theme.land,
+                              background: _theme.background,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -538,9 +369,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                 locationNotice: _location?.notice,
                 cities: _catalog,
                 savedCityIds: {for (final clock in _cities) clock.city.id},
-                pinnedCityIds: _pinnedCityIds,
                 onCityToggled: _toggleSavedCity,
-                onCityPinToggled: _togglePinnedCity,
               ),
             ),
           ],

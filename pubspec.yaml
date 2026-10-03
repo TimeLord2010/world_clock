@@ -41,12 +41,6 @@ dependencies:
   # custa ~2 MB de código (lib/data/latest_all.dart) e é 100% offline.
   timezone: ^0.11.1
 
-  # Polígonos de fuso (Timezone Boundary Builder): respondem "que zona contém
-  # ESTE ponto" para um clique em qualquer lugar do mapa. Também é usado pelo
-  # gerador do catálogo (tool/build_cities.dart), que resolve o fuso de cada
-  # cidade uma vez só — por isso o custo em runtime aqui é só o do clique.
-  timezone_finder: ^0.2.0
-
   # Onde a lista de cidades salvas e as fixadas sobrevivem ao fechamento do app.
   # Guarda só ids do catálogo — ver lib/city_store.dart.
   shared_preferences: ^2.5.5
@@ -54,6 +48,12 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Polígonos de fuso (Timezone Boundary Builder). Só o gerador do catálogo
+  # (tool/build_cities.dart) usa: ele resolve o fuso de cada cidade UMA vez e
+  # grava em assets/cities.json, então o app em runtime não carrega polígono
+  # nenhum — quem responde a hora é a tzdb do `timezone`.
+  timezone_finder: ^0.2.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

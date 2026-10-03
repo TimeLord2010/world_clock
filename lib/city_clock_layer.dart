@@ -3,19 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'city_clock.dart';
-import 'clicked_point.dart';
 import 'city_markers.dart';
 
 /// A camada das cidades: segura o instante e o ticker do relógio.
 ///
 /// O estado do relógio mora AQUI, e não no `WorldMapScreen`, de propósito: um
 /// tique de minuto não pode reconstruir a tela inteira (o mapa, o menu e o
-/// resto) só para trocar dois dígitos num cartão. É a mesma razão pela qual o
+/// resto) só para trocar dois dígitos num rótulo. É a mesma razão pela qual o
 /// hover do `MoonMarker` vive dentro dele — e, como a camada é irmã do
 /// `RepaintBoundary` dos pontos, o tique nem chega perto dos pontos do mapa.
 ///
 /// **Tem de ser filho direto de um `Stack`** com `clipBehavior: Clip.none`:
-/// quem se posiciona é o [CityMarkers] daqui de dentro, e o overlay pode passar
+/// quem se posiciona é o [CityMarkers] daqui de dentro, e um rótulo pode passar
 /// da borda do mapa.
 class CityClockLayer extends StatefulWidget {
   const CityClockLayer({
@@ -23,11 +22,6 @@ class CityClockLayer extends StatefulWidget {
     required this.cities,
     required this.mapSize,
     required this.land,
-    required this.background,
-    this.selectedId,
-    this.pinnedIds = const <String>{},
-    this.onSelect,
-    this.clickedPoint,
     this.clock = DateTime.now,
   });
 
@@ -37,29 +31,15 @@ class CityClockLayer extends StatefulWidget {
   /// Tamanho do retângulo do mapa, em pontos.
   final Size mapSize;
 
+  /// Cor de TERRA do tema em uso: o anel de cada cidade acompanha o tema.
   final Color land;
-  final Color background;
-
-  /// A cidade com o overlay aberto por clique.
-  final String? selectedId;
-
-  /// As cidades com o overlay preso aberto ("sempre visível").
-  final Set<String> pinnedIds;
-
-  /// Chamado com o id da cidade quando o disco dela é clicado.
-  final ValueChanged<String>? onSelect;
-
-  /// O ponto consultado no mapa (ver [ClickedPoint]), quando há um. A camada só
-  /// o repassa: quem resolve o ponto é a tela, que tem o resolver e a geração do
-  /// clique.
-  final ClickedPoint? clickedPoint;
 
   /// De onde vem "agora". Injetável pelos mesmos motivos de
   /// `WorldDotMap(now:)`: um widget que lê o relógio do sistema por conta
   /// própria não tem como ser testado numa hora fixa.
   ///
   /// Devolve a hora LOCAL do aparelho — e é o mesmo valor que serve de
-  /// referência para o "+1 dia" do overlay, porque um `DateTime` local É um
+  /// referência para o "+1 dia" do rótulo, porque um `DateTime` local É um
   /// instante e É o relógio de parede de quem olha.
   final DateTime Function() clock;
 
@@ -130,11 +110,6 @@ class _CityClockLayerState extends State<CityClockLayer> {
       // olha, e é dele que sai o "+1 dia".
       here: _now,
       land: widget.land,
-      background: widget.background,
-      selectedId: widget.selectedId,
-      pinnedIds: widget.pinnedIds,
-      onSelect: widget.onSelect,
-      clickedPoint: widget.clickedPoint,
     );
   }
 }
