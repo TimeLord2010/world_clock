@@ -36,9 +36,20 @@ dependencies:
   cupertino_icons: ^1.0.8
   geolocator: ^14.1.1
 
+  # Base de fusos horários da IANA (tzdb) com as regras de horário de verão:
+  # é ela que responde "que horas são lá" — nunca `longitude / 15`. O pacote
+  # custa ~2 MB de código (lib/data/latest_all.dart) e é 100% offline.
+  timezone: ^0.11.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Só o gerador do catálogo (tool/build_cities.dart) usa este pacote: o fuso
+  # de cada cidade é resolvido UMA vez, fora do app, e gravado em
+  # assets/cities.json. Na Fase 2 ele passa a ser dependência de runtime, para
+  # resolver o fuso de um ponto qualquer clicado no mapa.
+  timezone_finder: ^0.2.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -60,6 +71,10 @@ flutter:
 
   assets:
     - assets/world_dots.json
+    # Catálogo de cidades (nome, estado, país, coordenada, fuso IANA e
+    # população), gerado por `tool/build_cities.dart` a partir do Natural Earth.
+    # A procedência e a versão dos dados vão gravadas dentro do próprio arquivo.
+    - assets/cities.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
