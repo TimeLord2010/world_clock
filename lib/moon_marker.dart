@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'map_overlay.dart';
 import 'moon_position.dart';
 import 'panel_card.dart';
 import 'world_dot_map.dart';
@@ -125,60 +126,50 @@ class _MoonMarkerState extends State<MoonMarker> {
     );
   }
 
-  /// O painel de informações, encostado no disco do lado que tem espaço: se a
-  /// Lua está na metade direita do mapa, o painel abre para a esquerda (e vice
-  /// versa); idem para cima/baixo. Ancorar pelo lado — `right`/`bottom` — evita
-  /// ter que adivinhar a largura do painel antes do layout, que é o que
-  /// aconteceria se ele fosse posicionado por `left`/`top` fixos.
+  /// O painel de informações, encostado no disco do lado que tem espaço.
+  ///
+  /// Quem decide o lado é [MapOverlayAnchor.forMarker] — a mesma conta que os
+  /// marcadores de cidade usam, para os dois nunca divergirem.
   Widget _overlay(Offset center, double radius) {
     final status = widget.status;
-    final toRight = center.dx <= widget.mapSize.width / 2;
-    final below = center.dy <= widget.mapSize.height / 2;
-
-    return Positioned(
-      left: toRight ? center.dx + radius + MoonMarker.gap : null,
-      right: toRight
-          ? null
-          : widget.mapSize.width - center.dx + radius + MoonMarker.gap,
-      top: below ? center.dy + MoonMarker.gap : null,
-      bottom: below ? null : widget.mapSize.height - center.dy + MoonMarker.gap,
-      // IgnorePointer: o overlay nunca pode roubar o ponteiro do mapa — sem
-      // isso, ele apareceria e no mesmo instante o MouseRegion de baixo perderia
-      // o hover, e o painel ficaria piscando.
-      child: IgnorePointer(
-        child: PanelCard(
-          background: widget.background,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MoonDisc(
-                    illumination: status.illumination,
-                    diameter: 22,
-                    litDirectionRad: status.waxing ? 0 : pi,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '${formatDecimal(status.illuminationPercent)}% iluminada',
-                    style: TextStyle(fontSize: 13, color: PanelCard.textColor),
-                  ),
-                ],
-              ),
+    return MapOverlayAnchor.forMarker(
+      center: center,
+      radius: radius,
+      mapSize: widget.mapSize,
+      gap: MoonMarker.gap,
+    ).wrap(
+      PanelCard(
+        background: widget.background,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MoonDisc(
+                  illumination: status.illumination,
+                  diameter: 22,
+                  litDirectionRad: status.waxing ? 0 : pi,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${formatDecimal(status.illuminationPercent)}% iluminada',
+                  style: TextStyle(fontSize: 13, color: PanelCard.textColor),
+                ),
+              ],
             ),
-            PanelInfoRow(label: 'Fase', value: status.phase.label),
-            PanelInfoRow(
-              label: 'Distância',
-              value: '${formatThousands(status.distanceKm.round())} km',
-            ),
-            // As próximas fases vão numa ÚNICA linha, cada uma com o desenho da
-            // fase em cima e a data embaixo (dia e mês): lado a lado elas se
-            // comparam de relance, e as duas passagens de 50% aparecem juntas —
-            // uma entre a nova e a cheia, outra entre a cheia e a nova.
-            _UpcomingStrip(events: _upcoming(status)),
-          ],
-        ),
+          ),
+          PanelInfoRow(label: 'Fase', value: status.phase.label),
+          PanelInfoRow(
+            label: 'Distância',
+            value: '${formatThousands(status.distanceKm.round())} km',
+          ),
+          // As próximas fases vão numa ÚNICA linha, cada uma com o desenho da
+          // fase em cima e a data embaixo (dia e mês): lado a lado elas se
+          // comparam de relance, e as duas passagens de 50% aparecem juntas —
+          // uma entre a nova e a cheia, outra entre a cheia e a nova.
+          _UpcomingStrip(events: _upcoming(status)),
+        ],
       ),
     );
   }
