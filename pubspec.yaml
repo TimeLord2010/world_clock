@@ -41,6 +41,10 @@ dependencies:
   # custa ~2 MB de código (lib/data/latest_all.dart) e é 100% offline.
   timezone: ^0.11.1
 
+  # Onde a lista de cidades salvas e as fixadas sobrevivem ao fechamento do app.
+  # Guarda só ids do catálogo — ver lib/city_store.dart.
+  shared_preferences: ^2.5.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

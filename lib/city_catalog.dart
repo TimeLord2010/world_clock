@@ -46,6 +46,25 @@ abstract final class CityCatalog {
     ];
   }
 
+  /// As cidades de [catalog] que [ids] apontam, na ordem do catálogo (por
+  /// população).
+  ///
+  /// Id que não existe mais é DESCARTADO em silêncio, de propósito: regenerar o
+  /// catálogo numa versão nova do Natural Earth pode remover um lugar, e o
+  /// usuário não tem o que fazer a respeito — travar a abertura do app por causa
+  /// de um id órfão seria pior do que perder a cidade. A ordem sai daqui, e não
+  /// da ordem em que os ids foram salvos, para os marcadores não dançarem entre
+  /// execuções.
+  static List<City> byIds(List<City> catalog, Set<String> ids) {
+    if (ids.isEmpty) {
+      return const <City>[];
+    }
+    return [
+      for (final city in catalog)
+        if (ids.contains(city.id)) city,
+    ];
+  }
+
   /// As cidades que casam com [query], das mais relevantes para as menos.
   ///
   /// Consulta vazia devolve o catálogo inteiro (já em ordem de população), que

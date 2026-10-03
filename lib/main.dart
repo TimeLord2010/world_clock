@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 
+import 'city_catalog.dart';
+import 'city_clock.dart';
+import 'city_clock_layer.dart';
+import 'city_store.dart';
 import 'map_theme.dart';
 import 'moon_marker.dart';
 import 'moon_position.dart';
@@ -22,19 +26,24 @@ void main() {
   // tzdb completa, então com `latest` uma cidade legítima derrubaria a abertura
   // do app.
   tzdata.initializeTimeZones();
-  runApp(const WorldClockApp());
+  runApp(const WorldClockApp(cityStore: SharedPreferencesCityStore()));
 }
 
 class WorldClockApp extends StatelessWidget {
   const WorldClockApp({
     super.key,
     this.locationLookup = UserLocationResolver.resolve,
+    this.cityStore,
   });
 
   /// Como a tela descobre a posição do usuário — repassado para
   /// [WorldMapScreen.locationLookup]; os testes trocam por uma resposta fixa e
   /// assim não dependem de rede nem de permissão.
   final Future<UserLocation> Function() locationLookup;
+
+  /// Onde as cidades salvas ficam entre execuções. Repassado para
+  /// [WorldMapScreen.cityStore]; nulo desliga a persistência.
+  final CityStore? cityStore;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +58,10 @@ class WorldClockApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: WorldMapScreen(locationLookup: locationLookup),
+      home: WorldMapScreen(
+        locationLookup: locationLookup,
+        cityStore: cityStore,
+      ),
     );
   }
 }
@@ -58,11 +70,21 @@ class WorldMapScreen extends StatefulWidget {
   const WorldMapScreen({
     super.key,
     this.locationLookup = UserLocationResolver.resolve,
+    this.cityStore,
   });
 
   /// Como descobrir a posição do usuário. Injetável para os testes rodarem sem
   /// rede nem permissão (o padrão é a resolução de verdade).
   final Future<UserLocation> Function() locationLookup;
+
+  /// Onde ler e gravar as cidades salvas.
+  ///
+  /// **Nulo é o padrão, e nulo significa "sem persistência"** — de propósito. O
+  /// `shared_preferences` é um plugin nativo: chamá-lo num teste de widget sem
+  /// preparo derruba o teste com `MissingPluginException`. Assim os testes que
+  /// não se interessam por cidades (a maioria) não precisam saber que isso
+  /// existe, e quem quer testar persistência injeta um `MemoryCityStore`.
+  final CityStore? cityStore;
 
   @override
   State<WorldMapScreen> createState() => _WorldMapScreenState();
@@ -91,10 +113,22 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   /// sem prender a abertura do app.
   UserLocation? _location;
 
+  /// As cidades salvas, com o fuso de cada uma já resolvido. Vazio enquanto a
+  /// leitura do disco não volta (e continua vazio se não houver nada salvo).
+  List<CityClock> _cities = const <CityClock>[];
+
+  /// A cidade com o overlay aberto por clique — uma só por vez. O overlay
+  /// "sempre visível" é outra coisa: vem de [_pinnedCityIds].
+  String? _selectedCityId;
+
+  /// As cidades com o horário sempre visível, sem depender de clique.
+  Set<String> _pinnedCityIds = const <String>{};
+
   @override
   void initState() {
     super.initState();
     unawaited(_refreshLocation());
+    unawaited(_restoreCities());
     // Keep the day/night boundary moving: refresh the reference instant
     // every 5 minutes (the sun moves ~1,25° of longitude in that window —
     // about one cell of the 1° dot grid; the old 15-minute step was ~3,75°).
@@ -112,6 +146,51 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       // pergunta de novo. Uma consulta a cada 5 min é barata (a posição do
       // sistema vem do cache do Wi-Fi, o IP é uma requisição curta).
       unawaited(_refreshLocation());
+    });
+  }
+
+  /// Lê o catálogo e as cidades salvas, e publica as que ainda existem.
+  ///
+  /// As três coisas são assíncronas (asset, disco, e o `tz.getLocation` de cada
+  /// cidade), então a tela abre sem marcador nenhum e eles entram quando a
+  /// leitura volta — o mesmo contrato do ponto do usuário, que também não
+  /// prende a abertura.
+  Future<void> _restoreCities() async {
+    final store = widget.cityStore;
+    if (store == null) {
+      return;
+    }
+    try {
+      final catalog = await CityCatalog.load();
+      final saved = await store.load();
+      final chosen = CityCatalog.byIds(catalog, saved.selected);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _cities = [for (final city in chosen) CityClock(city)];
+        // Ids de cidades que não existem mais no catálogo ficam no conjunto sem
+        // efeito nenhum (só é consultado com `contains`), e o próximo `save`
+        // limpa.
+        _pinnedCityIds = saved.pinned;
+      });
+    } catch (error) {
+      // O mapa é o conteúdo; as cidades são um extra. Uma falha ao ler o
+      // catálogo ou o disco não pode impedir o app de abrir — mas também não
+      // pode sumir sem deixar rastro.
+      if (kDebugMode) {
+        debugPrint('[cidades] falha ao restaurar as cidades salvas: $error');
+      }
+    }
+  }
+
+  /// Abre o overlay da cidade clicada; clicar de novo na mesma fecha.
+  ///
+  /// Não grava: a cidade já está salva (senão não estaria no mapa), e qual
+  /// overlay está aberto agora é estado de sessão, não escolha do usuário.
+  void _selectCity(String id) {
+    setState(() {
+      _selectedCityId = _selectedCityId == id ? null : id;
     });
   }
 
@@ -189,6 +268,24 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                           // Positioned.fill: o marcador se posiciona sozinho (e o
                           // overlay junto), porque a posição depende do tamanho
                           // do mapa em pontos.
+                          //
+                          // As CIDADES vêm antes da Lua e do ponto do usuário no
+                          // Stack (ou seja, por baixo dos dois): num encontro
+                          // fortuito, quem manda é o "você está aqui" e o objeto
+                          // celeste, que não são clicáveis nem escolhidos pelo
+                          // usuário. O ponto do usuário é IgnorePointer, então um
+                          // clique sobre a cidade atravessa e chega nela.
+                          Positioned.fill(
+                            child: CityClockLayer(
+                              cities: _cities,
+                              mapSize: Size(mapWidth, mapWidth / 2),
+                              land: _theme.land,
+                              background: _theme.background,
+                              selectedId: _selectedCityId,
+                              pinnedIds: _pinnedCityIds,
+                              onSelect: _selectCity,
+                            ),
+                          ),
                           Positioned.fill(
                             child: MoonMarker(
                               status: _moon,

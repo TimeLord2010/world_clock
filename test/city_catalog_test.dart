@@ -209,6 +209,42 @@ void main() {
     });
   });
 
+  group('busca por ids (as cidades salvas)', () {
+    late List<City> cities;
+
+    setUp(() async {
+      cities = await CityCatalog.load();
+    });
+
+    test('devolve as cidades na ordem do catálogo, não na dos ids', () async {
+      final fortaleza = cities.firstWhere(
+        (city) => city.name == 'Fortaleza' && city.region == 'Ceará',
+      );
+      final tokyo = cities.firstWhere((city) => city.name == 'Tóquio');
+
+      // Tóquio primeiro no conjunto; o catálogo ordena por população, então
+      // Tóquio (36 M) vem antes de Fortaleza (3,6 M) — e é essa a ordem que
+      // tem de sair, para os marcadores não dançarem entre execuções.
+      final chosen = CityCatalog.byIds(cities, {fortaleza.id, tokyo.id});
+
+      expect(chosen.map((city) => city.name), ['Tóquio', 'Fortaleza']);
+    });
+
+    test('id que não existe mais é descartado em silêncio', () async {
+      final fortaleza = cities.firstWhere(
+        (city) => city.name == 'Fortaleza' && city.region == 'Ceará',
+      );
+
+      final chosen = CityCatalog.byIds(cities, {fortaleza.id, 'id-orfao'});
+
+      expect(chosen.map((city) => city.id), [fortaleza.id]);
+    });
+
+    test('conjunto vazio não varre o catálogo', () async {
+      expect(CityCatalog.byIds(cities, const <String>{}), isEmpty);
+    });
+  });
+
   group('linha malformada', () {
     List<Object?> row({
       Object? id = '1',
